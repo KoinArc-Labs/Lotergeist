@@ -1,89 +1,98 @@
-# Lotergeist (live demo)
+# Chimera Rx
 
-A pharmacy lot ledger: receive and put away stock by scanning, track every package by lot and serial, record the lot on each fill, and turn an FDA recall into held stock and a patient notification list.
+> Every lot accounted for, from the delivery dock to the patient's medicine cabinet.
 
-Run it: `pnpm install`, `pnpm lg:fax` (once, makes the demo fax image), then `pnpm dev` and open http://localhost:5173. Sign in with a demo account (all share the password `moonlight-rx-2026`): `j.rivera@elmstreetrx.example` (pharmacist), `k.patel@…` (technician), `m.diaz@…` (cashier), `s.grant@…` (admin: integrations only). UI follows `Lotergeist-prototype/` (light and dark), plan in `docs/plan.md`.
+Chimera Rx is a pharmacy lot ledger. It records the lot and serial of every package when it arrives, when it is shelved and when it is handed to a patient. When the FDA recalls a lot, it finds the units on the shelf and the patients who took one home, and drafts the messages to reach them. A pharmacist approves every step.
 
-The eight screens: Sign in, Today, Receiving, Inventory, Fill & pickup, Patients, Recalls, Integrations.
+**Kiroween 2026 · Frankenstein category.** Built with Kiro. **Synthetic data only. Not for clinical use. Not HIPAA-compliant.** See [docs/SAFETY.md](docs/SAFETY.md).
 
-- Rx Watcher (`apps/lg-api/src/rxwatcher.ts`, rules in `drugs.ts`): reviews every new order (at start-up and every minute). Deterministic rules decide: frequency vs label, days supply vs quantity, dose vs this patient's history, allergy class, interactions, duplicate therapy, early refill of C-II. An optional LLM (`LLM_PROVIDER=bedrock|anthropic`) may only explain or add a lower-confidence "possible issue"; it never removes a rule hit. A flagged order cannot be scanned until a pharmacist approves (with a reason), rejects, or asks the prescriber to change it.
-- Prescriber change loop: sandbox NCPDP SCRIPT `RxChangeRequest` / `RxChangeResponse`. An approved change creates a new immutable version (`0072210-R1`) that Rx Watcher re-checks. A practice system can answer over `POST /v1/change-requests/:id/response`.
-- Patients: search by name, DOB, phone or Rx; a reason is required to open a profile and is written to the audit log. Safety review (past vs current medicines), medication history with lot per fill, refills and refill sync.
-- Voicemail outreach (`outreach.ts`, `voice.ts`): the default recall channel. The script is checked so it never names the medicine, the reason or a patient ID. It is rendered to real speech with ElevenLabs or OpenAI if a key is set, else the best macOS voice (novelty voices excluded), else the browser's voice. **Nothing is dialled**: outcomes (answered with transfer, voicemail, retry tomorrow, call list) are simulated, calling window 9 AM–8 PM patient time, callbacks show the open recall. For a better local voice, download "Ava (Premium)" in System Settings → Accessibility → Spoken Content and set `MAC_VOICE`.
-- Integrations (`integrations.ts`, `partner-api.ts`, `webhooks.ts`): OAuth 2.0 client credentials at `/oauth/token` (1-hour tokens), per-partner scopes, IP allowlist and rate limit; REST `/v1/*`, MCP `/mcp` (stateless JSON-RPC, tools filtered by scope, PHI scrubbed from output), FHIR R4 `/fhir/r4` (Medication with `batch.lotNumber`; patient resources need `patient.read` + BAA + admin approval). HMAC-signed webhooks with retries. Every partner call goes to the API activity log. The Integrations page has a live "try it" console.
-- Audit: append-only and hash-chained (`GET /api/audit/verify`, admin export as NDJSON).
-- Scanning: webcam GS1 DataMatrix (BarcodeDetector, zxing fallback), USB scanner or typing. "Print test labels" shows real DataMatrix codes for the demo stock.
-- OCR: tesseract.js runs in the browser from `apps/lg-web/public/ocr` (run `pnpm --filter @bsrx/lg-web run ocr:assets` once to download it). Used for labels without a barcode and for the recall fax.
-- Data: SQLite (`data/lotergeist.sqlite`), synthetic only. The pharmacist can reset it via `POST /api/demo/reset`.
-- Tests: `pnpm test` (API incl. property test of ledger invariants), `pnpm e2e:lg` (fake webcam + OCR in Chromium, needs the stack running).
+## The problem
 
-Not real, on purpose: SMS, email and phone calls are sandboxed (outbox and simulated call outcomes), the prescriber channel is a SCRIPT-shaped sandbox (no Surescripts), the drug rules are a small curated table (not a licensed interaction database), SSO is a demo stand-in, there is no second factor, the fridge temperature is simulated. Not verified: a physical webcam, OCR accuracy on curved labels. The Body Snatcher Rx code (`apps/api`, `apps/web`, `packages/*`) is kept as legacy; `pnpm dev:legacy` starts it.
+Wholesalers track drugs by lot. Pharmacy dispensing systems track drugs by patient. Almost none record which lot each patient received. So when a lot is recalled, a pharmacy either warns everyone who ever got that drug or warns no one. The lot number is printed in the 2D barcode on every package; it just is never captured at the counter.
 
----
+## The monster: parts that were never meant to fit
 
-# Body Snatcher Rx
-
-> Somewhere out there, a cursed lot is still walking.
-
-Body Snatcher Rx turns a vague FDA drug recall into an exact list of affected patients, shelf bottles and a pickup route. Kiroween 2026 entry (Frankenstein category).
-
-**Synthetic data only. Not for clinical use. Not HIPAA-compliant. A pharmacist approves every message and nothing is ever sent.** See [docs/SAFETY.md](docs/SAFETY.md).
-
-## The gap
-A pharmacy knows who received a drug, but the lot number is lost between the supply chain (which tracks lots) and the dispensing system (which tracks patients). So pharmacies warn everyone or no one. This app stitches six systems that were never meant to talk:
-
-1. **openFDA** recall notices (free text)
-2. **Coroner**: regex plus optional LLM lift NDC, lots and expiry, never inventing a lot
-3. **GS1 EPCIS 2.0** chain of custody (DuckDB, ~40,000 synthetic packages)
-4. **Grave Robber**: a Playwright bot reads a 1998 pharmacy terminal (RxTerm 98) and a fax inbox
-5. **GS1 DataMatrix** scan in the browser: cursed or clean
-6. **Hearse**: pickup route with NWS weather and cold-chain checks
-
-**New: the Soul Catcher (page V).** Most pharmacy systems never record the lot at fill time, yet the lot is printed in the DataMatrix on every prescription package. Hold a package to the webcam while filling: the app reads the real code, names the drug from openFDA, **flags it against every active recall by lot number** (CURSED, fill blocked), catches wrong or expired packages, and for good scans the bot types `LOT ... EXP ... SN ...` into the 1998 terminal and checks it landed.
+| Part | What it is | Where |
+| --- | --- | --- |
+| GS1 DataMatrix | The 2D barcode on drug packages, read by a webcam (BarcodeDetector, zxing fallback) or a USB scanner | `packages/gs1`, `apps/web/src/lib/scanner.ts` |
+| Fax + OCR | Recall faxes and barcode-less labels read in the browser with tesseract.js; nothing is uploaded | `apps/web/src/lib/ocr.ts`, `apps/api/src/ocr-text.ts` |
+| openFDA | The FDA drug enforcement API, live with cached fixtures as fallback | `packages/summoner` |
+| Coroner | Regex plus an optional LLM (Amazon Bedrock or Anthropic) that pulls NDC, lots and expiry out of free text. A lot is kept only if it appears verbatim in the source | `packages/coroner` |
+| Rx Watcher | Deterministic prescription rules; the LLM may only explain a hit, never remove one | `apps/api/src/rxwatcher.ts`, `drugs.ts` |
+| NCPDP SCRIPT | Sandbox `RxChangeRequest` / `RxChangeResponse` to the prescriber | `apps/api/src/prescriber.ts` |
+| FHIR R4, REST, MCP | Partner surfaces behind OAuth 2.0 client credentials and per-partner scopes; MCP lets AI agents query the ledger | `apps/api/src/partner-api.ts` |
+| Webhooks | HMAC-signed outbound events with retries | `apps/api/src/webhooks.ts` |
+| Voice | Recall voicemail rendered with ElevenLabs, OpenAI, macOS or the browser voice. Nothing is dialled | `apps/api/src/voice.ts`, `outreach.ts` |
+| Audit | Append-only, hash-chained audit log and a PDF recall report | `apps/api/src/core.ts`, `recall.ts` |
 
 ## Run it
-Needs Node 22.5+ (built on 26) and pnpm.
+
+Needs Node 22.5+ and pnpm 12.
 
 ```bash
 pnpm install
-cd packages/grave-robber && pnpm exec playwright install chromium && cd ../..
-pnpm seed        # synthetic crypt + fax PDFs (about a second)
-pnpm dev         # RxTerm 98 :4100, API :4000, web :5173
+pnpm setup      # once: downloads the OCR model and renders the demo fax image
+pnpm dev        # API on :4000, web app on :5173
 ```
 
-Open http://localhost:5173 and click **Enter as a judge**. Full script: [docs/DEMO.md](docs/DEMO.md).
+Open http://localhost:5173. All demo accounts share the password `moonlight-rx-2026`:
 
-One-box mode (the API serves the built web app): `pnpm build:web`, start RxTerm 98 (`pnpm dev:rxterm`) and the API (`pnpm dev:api`), then open http://localhost:4000.
+| Account | Role | Sees |
+| --- | --- | --- |
+| `j.rivera@elmstreetrx.example` | Pharmacist | Everything, including recalls and verification |
+| `k.patel@elmstreetrx.example` | Technician | Receiving, inventory, fill |
+| `m.diaz@elmstreetrx.example` | Cashier | Pickup only, no clinical details |
+| `s.grant@elmstreetrx.example` | Admin | Integrations only |
 
-Optional: copy `.env.example` to `.env`. With no LLM configured the Coroner runs regex-only (a tested mode). Set `LLM_PROVIDER=bedrock` or `anthropic` to enable the LLM pass.
+The demo store is Elm Street Pharmacy · Store 7, with a recall fax for D-0417-2026 waiting in the inbox. A pharmacist can reset all data from the Receiving or Recall screens.
 
-## Judge mode
-- **Enter as a judge** resets the demo and opens the first death notice. No login.
-- **Skip to a finished hunt** runs two hunts end to end so Scan and Hearse have data.
-- Test labels for the webcam: `/labels/labels.pdf` (Mirror) and `/labels/labels-fill.pdf` (Soul Catcher, one per verdict). No webcam? Paste the code into "Speak the code" or use a USB scanner.
-- Live webcam script: [docs/DEMO.md](docs/DEMO.md#live-webcam-demo-the-soul-catcher-page-v). Rehearse with a fake camera: `pnpm e2e:fill`.
+Optional: copy `.env.example` to `.env`. With no LLM configured the Coroner runs regex-only, which is a tested mode. Set `LLM_PROVIDER=bedrock` or `anthropic` to add the LLM pass.
+
+### Scanning without a real package
+
+Open **Test labels** in the sidebar. It shows real GS1 DataMatrix codes for the demo stock. Hold a phone or a printout up to the webcam, or paste the code into the scan box. A USB scanner works too: it types the code and presses Enter.
+
+## The screens
+
+Sign in, Today, Receiving, Inventory, Fill & pickup, Patients, Recalls, Integrations. The design source is `prototype/`; the full plan is [docs/plan.md](docs/plan.md). A 3-minute walkthrough is in [docs/DEMO.md](docs/DEMO.md).
 
 ## Tests
+
 ```bash
-pnpm test        # property tests, API end to end, Playwright bot against RxTerm 98
-pnpm e2e:fill    # with the stack running: UI + fake webcam + all six fill verdicts
+pnpm test        # unit, API end-to-end and property tests (Vitest + fast-check)
 pnpm typecheck
+pnpm e2e         # with the stack running: Chromium with a fake webcam and real OCR
 ```
+
+`pnpm e2e` replaces the camera with a canvas that "holds up" generated labels and a printed text label, then checks scan, put-away, a bad serial, label OCR, a fill, and the fax-to-recall flow through to messages sent.
 
 ## Layout
+
 ```
-apps/web        React + Vite, four screens from the design
-apps/api        Fastify API, event bus, SSE, SQLite state
-apps/rxterm98   Express mock of a 1998 pharmacy terminal
-packages/       gs1, summoner, coroner, crypt-seed, tracker, grave-robber, undertaker, hearse, dead-registry-mcp
-fixtures/       recalls (3 synthetic + 50 real 2025), fax PDFs, weather, shortages
-.kiro/          steering, specs, hooks, agents, MCP config
-docs/           ARCHITECTURE, SAFETY, DEMO, KIRO_USAGE
+apps/api               Fastify API, SQLite (node:sqlite), sandbox notifier, partner API
+apps/web               React + Vite, the eight screens
+packages/gs1           GS1 element strings, NDC and GTIN rules
+packages/summoner      openFDA client with fixture fallback
+packages/coroner       lot / NDC / expiry extraction (regex + optional LLM)
+fixtures/recalls       50 real 2025 openFDA records and demo recalls, used by the package tests
+apps/api/fixtures      the recall fixtures the running app falls back to when openFDA is offline
+prototype/  clickable design prototype
+.kiro/                 steering, specs, hooks, agents, MCP config
+docs/                  plan, architecture, safety, demo, how Kiro was used
 ```
 
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the diagram, events and API. [docs/KIRO_USAGE.md](docs/KIRO_USAGE.md) says how Kiro was used, including what failed.
+## Not real, on purpose
 
-## Limits
-Serials on past fills are inferred (the terminal and fax print none); lots scanned at fill are exact. Lot inference for past fills (INF-1 to INF-6) is not built. The webcam path is proven with a fake camera and generated labels, not yet with a physical webcam. No fax OCR. Straight-line routes unless `OSRM_URL` is set. The LLM pass has only been run with test doubles. Not deployed.
+- SMS and email go to a sandbox outbox. Calls are simulated; nothing is dialled.
+- The prescriber channel is SCRIPT-shaped but sandboxed (no Surescripts).
+- The drug rules are a small curated table, not a licensed interaction database.
+- "Badge tap / SSO" signs in the pharmacist as a stand-in. There is no second factor.
+- The fridge temperature is simulated, and the screen says so.
+
+## Not verified
+
+- A physical webcam with printed labels and real cartons. The camera path is proven with a fake camera only.
+- OCR accuracy on curved vial labels.
+- The LLM pass against a live model.
 
 MIT licensed.

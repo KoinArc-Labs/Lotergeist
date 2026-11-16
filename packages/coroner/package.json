@@ -1,5 +1,5 @@
 {
-  "name": "@bsrx/coroner",
+  "name": "@chimera-rx/coroner",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@bsrx/gs1": "workspace:*",
+    "@chimera-rx/gs1": "workspace:*",
     "zod": "3.25.76",
     "@aws-sdk/client-bedrock-runtime": "3.1163.0"
   }

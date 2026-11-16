@@ -1,88 +1,45 @@
-import { useSyncExternalStore } from "react";
-import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { CurrentRecallProvider, useCurrentRecall } from "./lib/current";
-import { useRecalls } from "./lib/hooks";
-import { reducedMotion, setSound, soundOn, subscribeSound } from "./lib/sound";
-import BodyTrail from "./screens/BodyTrail";
-import CryptGate from "./screens/CryptGate";
-import Hearse from "./screens/Hearse";
-import Scan from "./screens/Scan";
-import SoulCatcher from "./screens/SoulCatcher";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { get, type User } from "./lib/api";
+import { Shell } from "./components/Shell";
+import { SignIn } from "./screens/SignIn";
+import { Today } from "./screens/Today";
+import { Receiving } from "./screens/Receiving";
+import { Inventory } from "./screens/Inventory";
+import { Fill } from "./screens/Fill";
+import { Recalls } from "./screens/Recalls";
+import { Labels } from "./screens/Labels";
+import { Outbox } from "./screens/Outbox";
+import { Patients } from "./screens/Patients";
+import { Integrations } from "./screens/Integrations";
 
-export function Logo() {
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-      <path d="M14 3h12l6 9-4 25H12L8 12z" stroke="#b8f27c" strokeWidth="1.6" strokeLinejoin="round" />
-      <path d="M20 12v14M15 17h10" stroke="#b8f27c" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M10 31l3-1M27 30l3 1M11 22l2 0M27 22l2 0" stroke="#5c6a52" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
+export function App() {
+  const qc = useQueryClient();
+  const me = useQuery({ queryKey: ["me"], queryFn: () => get<{ user: User; today: string }>("/api/me"), retry: false });
+  useEffect(() => {
+    const h = () => void qc.invalidateQueries({ queryKey: ["me"] });
+    window.addEventListener("lg:unauthenticated", h);
+    return () => window.removeEventListener("lg:unauthenticated", h);
+  }, [qc]);
 
-function SoundToggle() {
-  const on = useSyncExternalStore(subscribeSound, soundOn, () => false);
-  const locked = reducedMotion();
+  if (me.isLoading) return <div style={{ padding: 40 }} className="dim">Loading…</div>;
+  if (me.isError || !me.data) return <SignIn />;
+  const user = me.data.user;
   return (
-    <button
-      className="candle"
-      aria-pressed={on}
-      disabled={locked}
-      title={locked ? "Sound stays off with reduced motion" : on ? "Sound on" : "Sound off"}
-      aria-label={locked ? "Sound is off because reduced motion is on" : on ? "Turn sound off" : "Turn sound on"}
-      onClick={() => setSound(!on)}
-    >
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-        <path d="M10 2c1.6 2.2 2.4 3.6 2.4 5a2.4 2.4 0 01-4.8 0c0-1.4.8-2.8 2.4-5z" fill={on ? "#f2b544" : "none"} stroke="currentColor" strokeWidth="1.4" />
-        <path d="M7 11h6v7H7z" stroke="currentColor" strokeWidth="1.4" />
-        {!on && <path d="M3 17L17 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />}
-      </svg>
-    </button>
-  );
-}
-
-function Shell() {
-  const { id } = useCurrentRecall();
-  const { error } = useRecalls();
-  const loc = useLocation();
-  const q = id ? `?r=${encodeURIComponent(id)}` : "";
-  const link = (to: string, label: string) => (
-    <NavLink to={{ pathname: to, search: q }} end aria-current={loc.pathname === to ? "page" : undefined}>{label}</NavLink>
-  );
-  return (
-    <div className="app">
-      <div aria-hidden="true" className="fog fogbg" />
-      <div role="note" className="banner">Synthetic data only · Not for clinical use · Not HIPAA-compliant · A pharmacist approves every message</div>
-      {error && <div role="alert" className="apierr">{(error as Error).message}</div>}
-      <header className="header">
-        <Link to={{ pathname: "/", search: q }} className="brand">
-          <Logo />
-          <span className="brand-text"><span className="brand-name">Body Snatcher Rx</span><span className="brand-tag">LOT-LEVEL RECALL HUNTER</span></span>
-        </Link>
-        <nav className="nav" aria-label="Stages">
-          {link("/", "I · Death Notice")}
-          {link("/trail", "II · Body Trail")}
-          {link("/scan", "III · Scan")}
-          {link("/hearse", "IV · Hearse")}
-          {link("/fill", "V · Soul Catcher")}
-          <SoundToggle />
-        </nav>
-      </header>
+    <Shell user={user}>
       <Routes>
-        <Route path="/" element={<CryptGate />} />
-        <Route path="/trail" element={<BodyTrail />} />
-        <Route path="/scan" element={<Scan />} />
-        <Route path="/hearse" element={<Hearse />} />
-        <Route path="/fill" element={<SoulCatcher />} />
-        <Route path="*" element={<CryptGate />} />
+        <Route path="/" element={user.role === "admin" ? <Navigate to="/integrations" replace /> : <Today user={user} />} />
+        <Route path="/patients" element={<Patients user={user} />} />
+        <Route path="/integrations" element={<Integrations user={user} />} />
+        <Route path="/receiving" element={<Receiving user={user} />} />
+        <Route path="/inventory" element={<Inventory user={user} />} />
+        <Route path="/fill" element={<Fill user={user} />} />
+        <Route path="/recalls" element={<Recalls user={user} />} />
+        <Route path="/labels" element={<Labels />} />
+        <Route path="/outbox" element={<Outbox />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </div>
-  );
-}
-
-export default function App() {
-  return (
-    <CurrentRecallProvider>
-      <Shell />
-    </CurrentRecallProvider>
+    </Shell>
   );
 }

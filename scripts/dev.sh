@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Starts RxTerm 98 (4100), the API (4000) and the Vite dev server (5173). Ctrl-C stops all three.
-set -euo pipefail
+# Starts Chimera Rx: API on 4000 and web app on 5173. Ctrl-C stops both.
+set -e
 cd "$(dirname "$0")/.."
-[[ -f data/crypt.duckdb ]] || pnpm seed
-pids=()
-trap 'kill "${pids[@]}" 2>/dev/null || true' EXIT INT TERM
-pnpm --filter @bsrx/rxterm98 run start & pids+=($!)
-pnpm --filter @bsrx/api run start & pids+=($!)
-pnpm --filter @bsrx/web run dev & pids+=($!)
+pnpm --filter @chimera-rx/api run dev &
+API=$!
+pnpm --filter @chimera-rx/web run dev &
+WEB=$!
+trap 'kill $API $WEB 2>/dev/null' EXIT INT TERM
 wait

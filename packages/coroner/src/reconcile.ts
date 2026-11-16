@@ -1,4 +1,4 @@
-import { normalizeLot, parseNdc } from "@bsrx/gs1";
+import { normalizeLot, parseNdc } from "@chimera-rx/gs1";
 import { toIsoDate } from "./dates";
 import type { LlmOutput } from "./llm";
 import type { RegexResult } from "./regex-pass";

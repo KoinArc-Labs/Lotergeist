@@ -3,7 +3,6 @@ on:
   push:
     branches: [main]
   pull_request:
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -17,11 +16,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: PHI guard (SAFE-2)
+      - name: PHI guard
         run: bash scripts/phi-guard.sh --all
-      - run: pnpm exec playwright install --with-deps chromium
-        working-directory: packages/grave-robber
-      - run: pnpm seed
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build:web

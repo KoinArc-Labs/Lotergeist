@@ -1,5 +1,5 @@
 {
-  "name": "@bsrx/api",
+  "name": "@chimera-rx/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,24 +7,23 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts"
+    "start": "tsx src/server.ts",
+    "fax": "node scripts/make-fax.mjs"
   },
   "dependencies": {
-    "@bsrx/gs1": "workspace:*",
-    "@bsrx/coroner": "workspace:*",
-    "@bsrx/summoner": "workspace:*",
-    "@bsrx/crypt-seed": "workspace:*",
-    "@bsrx/tracker": "workspace:*",
-    "@bsrx/grave-robber": "workspace:*",
-    "@bsrx/undertaker": "workspace:*",
-    "@bsrx/hearse": "workspace:*",
-    "fastify": "5.12.8",
+    "@chimera-rx/coroner": "workspace:*",
+    "@chimera-rx/gs1": "workspace:*",
+    "@chimera-rx/summoner": "workspace:*",
+    "@fastify/cookie": "11.1.5",
     "@fastify/cors": "11.4.1",
+    "@fastify/static": "10.1.10",
+    "bwip-js": "4.11.4",
+    "fastify": "5.12.8",
     "node-cron": "4.6.0",
-    "zod": "3.25.76",
-    "@fastify/static": "10.1.10"
+    "pdfkit": "0.20.2",
+    "zod": "3.25.76"
   },
   "devDependencies": {
-    "@bsrx/rxterm98": "workspace:*"
+    "@types/pdfkit": "0.17.7"
   }
 }

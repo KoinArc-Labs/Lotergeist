@@ -1,6 +1,6 @@
 ---
 inclusion: fileMatch
-fileMatchPattern: "packages/(gs1|tracker|crypt-seed)/**"
+fileMatchPattern: "packages/gs1/**"
 ---
 
 # GS1 standards used here
@@ -21,14 +21,7 @@ Variable-length AIs are followed by FNC1 (ASCII GS, 0x1d) unless last. Scanners 
 - An 11-digit NDC maps back to up to three GTINs, one per segment that could have lost a leading zero (`ndcToGtin14Candidates`).
 - Check digit: weights 3,1,3,1 from the right of the body, `(10 - sum % 10) % 10`.
 
-## EPCIS 2.0
-Events are flattened ObjectEvents. Instance identifier is a GS1 Digital Link: `https://id.gs1.org/01/{gtin}/21/{serial}`.
+## Supplier transaction data (DSCSA TI/TS)
+Each delivery carries the supplier's list of `(GTIN, lot, serial, expiry)` it shipped (`ti_records`). At receiving, a scanned serial must appear in that list with the same lot, or the TI/TS check fails and the package can only be reported and quarantined. A label with no serial (read by OCR) gets an internal `NOSN-` ID and a TI/TS warning, never a pass.
 
-| bizStep | Who writes it | Notes |
-| --- | --- | --- |
-| commissioning | manufacturer | readPoint = manufacturer GLN, bizLocation = line |
-| shipping | manufacturer or distributor | `sourceGln` -> `destGln` |
-| receiving | distributor or pharmacy | `ownerGln` is the holder after the event, `bizLocation` = shelf |
-| dispensing | Grave Robber (`origin: rpa`) | written back from terminal/fax rows, never in the seed |
-
-Invariant (TRK-3): every pharmacy `receiving` has an earlier `shipping` to that pharmacy. No orphan serials.
+Invariant: a package reaches `on_shelf` only after receiving checks pass; the ledger property test enforces on hand = received − dispensed − returned − adjusted.
