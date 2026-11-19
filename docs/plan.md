@@ -1,5 +1,7 @@
 # Chimera Rx — Full Solution Plan
 
+> **Status note (read first).** This is the original product and production-target plan. The pilot in this repo differs on purpose: it runs on Node's built-in `node:sqlite` (not PostgreSQL and Redis), has no `services/`, `connectors/` or `infra/` folders, and sandboxes every outside party (wholesaler, prescriber channel, voice, verifier). For what runs today see `README.md`, `docs/ARCHITECTURE.md` and `docs/SECURITY.md`. Sections 12 and 14 to 16 describe the target, not the pilot.
+
 > Pharmacy operations platform that tracks every package by lot and serial from the delivery dock to the patient, catches prescription problems with an AI checker, and turns a recall into a list of affected stock and patients in minutes.
 >
 > Version 1.0 · Nov 2026 · Author: Pritesh Borad

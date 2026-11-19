@@ -30,7 +30,7 @@ pnpm install && pnpm setup && pnpm dev
 
 ## Other things worth showing if time allows
 
-- **The real recall.** Look up D-0526-2026 (a real Hikma alendronate recall). Its lot AC2040A then fails the dock check when you scan it from delivery ASH-1105-08.
+- **The real recall.** Look up D-0526-2026 (a real alendronate recall from openFDA). Its lot AC2040A then fails the dock check when you scan it from delivery ASH-1105-08.
 - **Schedule II.** Scanning the oxycodone package asks for a witness. The witness must be a different staff member and must enter their own password.
 - **Roles.** Sign in as the cashier: Fill shows pickup only, with no allergies or date of birth.
 - **Audit.** `GET /api/audit/verify` recomputes the hash chain.
