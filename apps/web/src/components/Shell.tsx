@@ -37,6 +37,10 @@ const NavIcon = {
   plug: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M7 2.5v4M13 2.5v4M5 6.5h10v3a5 5 0 01-10 0zM10 14.5v3" /></svg>
 };
 
+const AgentsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5 8.4 10.1 4 8.5l4.4-1.6zM15.5 13l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" /></svg>
+);
+
 export function Shell({ user, children }: { user: User; children: ReactNode }) {
   const qc = useQueryClient();
   useTheme();
@@ -73,6 +77,10 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
             <span className="nav-label">Care</span>
             {user.role !== "cashier" && item("/patients", "Patients", NavIcon.patients)}
             {item("/recalls", "Recalls", Icon.shield(), badges.recalls ? <span className="count red">{badges.recalls}</span> : null)}
+          </>}
+          {user.role !== "cashier" && <>
+            <span className="nav-label">AI</span>
+            {item("/agents", "AI agents", <AgentsIcon />)}
           </>}
           {(user.role === "admin" || user.role === "pharmacist") && <>
             <span className="nav-label">Admin</span>

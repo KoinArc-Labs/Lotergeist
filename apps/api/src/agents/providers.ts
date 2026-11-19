@@ -198,7 +198,13 @@ function mockCopilot(d: any): string {
     return JSON.stringify({ tool: "open_recalls", args: {} });
   }
   const r = results[results.length - 1]!;
-  return JSON.stringify({ answer: `From ${r.tool}: ${JSON.stringify(r.result)}` });
+  const x = r.result as any;
+  const answer = r.tool === "patients_for_lot" ? (x.count ? `${x.count} patient${x.count === 1 ? "" : "s"} received lot ${x.lot}: ${x.patientIds.join(", ")}.` : `No patient has been sold lot ${x.lot}.`)
+    : r.tool === "units_on_shelf" ? ((x.products ?? []).map((p: any) => `${p.product}: ${p.unitsOnShelf} on the shelf.`).join(" ") || "No product matched.")
+    : r.tool === "lot_lookup" ? ((x.lots ?? []).map((l: any) => `Lot ${l.lot} of ${l.product}: expires ${l.expiry}, status ${l.status}, ${l.unitsOnShelf} on the shelf, ${l.unitsQuarantined} quarantined.`).join(" ") || "No lot with that number is in the ledger.")
+    : r.tool === "open_recalls" ? ((x.recalls ?? []).length ? `Open recalls: ${x.recalls.map((c: any) => `${c.id} (${c.product}, ${c.lotsAwaitingConfirmation} lot${c.lotsAwaitingConfirmation === 1 ? "" : "s"} awaiting confirmation)`).join("; ")}.` : "No open recalls.")
+    : (x?.error ? String(x.error) : "Done.");
+  return JSON.stringify({ answer });
 }
 
 // ------------------------------------------------------------------ the runtime

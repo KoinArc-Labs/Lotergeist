@@ -15,6 +15,7 @@ import { Patients } from "./screens/Patients";
 import { Integrations } from "./screens/Integrations";
 import { Register } from "./screens/Register";
 import { StockHelp } from "./screens/StockHelp";
+import { AIAgents } from "./screens/AIAgents";
 import { Transfers } from "./screens/Transfers";
 
 export function App() {
@@ -42,6 +43,7 @@ export function App() {
         <Route path="/register" element={<Register user={user} />} />
         <Route path="/transfers" element={<Transfers user={user} />} />
         <Route path="/stock" element={<StockHelp user={user} />} />
+        <Route path="/agents" element={<AIAgents user={user} />} />
         <Route path="/labels" element={<Labels />} />
         <Route path="/outbox" element={<Outbox />} />
         <Route path="*" element={<Navigate to="/" replace />} />
