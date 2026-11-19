@@ -11,7 +11,7 @@ pnpm install && pnpm setup && pnpm dev
 - Open http://localhost:5173 in Chrome (the camera needs `localhost` or HTTPS).
 - Open **Test labels** on a phone or print them, so you can hold codes up to the webcam.
 - Sign in as the pharmacist (`j.rivera@elmstreetrx.example` / `moonlight-rx-2026`). The technician account is needed only for the Schedule II witness.
-- Reset between takes: the **Replay demo** button on the recall's Done step (`POST /api/demo/reset`).
+- Reset between takes: **Reset demo** on the Today screen (or the **Replay demo** button on the recall's Done step). The Today screen also has five scenarios, each with a short brief of what to try.
 
 ## Script
 

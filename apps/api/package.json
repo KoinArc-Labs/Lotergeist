@@ -8,7 +8,9 @@
     "typecheck": "tsc -p tsconfig.json",
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
-    "fax": "node scripts/make-fax.mjs"
+    "fax": "node scripts/make-fax.mjs",
+    "evidence:accuracy": "tsx scripts/evidence-accuracy.ts",
+    "evidence:timing": "tsx scripts/evidence-timing.ts"
   },
   "dependencies": {
     "@chimera-rx/coroner": "workspace:*",

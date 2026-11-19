@@ -23,6 +23,7 @@ import { confirmPutaway, deliveryView, listDeliveries, PROBLEM_KINDS, reportProb
 import { seedDatabase, expectedPackages, FILL_PACKAGES, PRODUCTS } from "./seed";
 import { gtinOf, ndc11Digits } from "./domain";
 import { ingestFaxInbox, pollOpenFda, todayView } from "./today";
+import { listScenarios, resetDemo, scenarioLabels, startScenario } from "./scenarios";
 
 declare module "fastify" { interface FastifyRequest { actor?: Actor; user?: SessionUser } }
 
@@ -285,16 +286,19 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
       const exp = ctx.db.get<{ expiry: string }>("SELECT expiry FROM lots WHERE ndc11 = ? AND lot = ?", ndc11Digits(f.ndc10), f.lot)?.expiry ?? "";
       return row ? [{ ...dm({ ndc10: f.ndc10, lot: f.lot, expiry: exp, serial: row.serial }), group: "Fill & pickup", note: f.note, scanned: false }] : [];
     });
-    return { labels: [...receiving, ...fill] };
+    const extra = scenarioLabels(ctx).map((l) => ({ ...dm(l), group: l.group, note: l.note, scanned: !!ctx.db.get("SELECT 1 FROM packages WHERE gtin = ? AND serial = ?", gtinOf(l.ndc10), l.serial) }));
+    return { labels: [...extra, ...receiving, ...fill] };
   });
   app.post("/api/demo/reset", async (req) => {
     only(req, "pharmacist");
-    ctx.db.clearAll();
-    seedDatabase(ctx.db, ctx.cfg, ctx.now());
-    seedPartners(ctx);
-    await ingestFaxInbox(ctx);
-    await reviewPending(ctx);
+    await resetDemo(ctx, A(req));
     return { ok: true };
+  });
+  // ---- scenario library (FR6, US1.1): pick a known state from the app, no terminal needed
+  app.get("/api/demo/scenarios", async () => listScenarios(ctx));
+  app.post("/api/demo/scenarios/:id", async (req) => {
+    only(req, "pharmacist");
+    return startScenario(ctx, A(req), (req.params as { id: string }).id);
   });
 
   // ---- partner surfaces: /oauth/token, /v1, /mcp, /fhir/r4 (their own auth, scopes and log)

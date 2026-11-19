@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { get, type User } from "../lib/api";
 import { C, Footer, Icon, MONO, pill, TONES } from "../components/kit";
 import { mainStyle, PageHeader } from "../components/Shell";
+import { Scenarios } from "../components/Scenarios";
 
 const EVENT_TONE: Record<string, string> = { Sold: "green", Filled: "violet", Received: "cold", Shelved: "cold", Quarantined: "red", Returned: "orange", Adjusted: "amber", Moved: "violet", Released: "green" };
 const TAG_TONE: Record<string, string> = { orange: "orange", green: "green", violet: "violet", red: "red" };
@@ -65,6 +66,7 @@ export function Today({ user }: { user: User }) {
             </span>
           </Link>
         )}
+        <Scenarios user={user} />
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16 }}>
           {(t?.kpis ?? []).map((k: any) => (

@@ -25,7 +25,28 @@ Wholesalers track drugs by lot. Pharmacy dispensing systems track drugs by patie
 | Voice | Recall voicemail rendered with ElevenLabs, OpenAI, macOS or the browser voice. Nothing is dialled | `apps/api/src/voice.ts`, `outreach.ts` |
 | Audit | Append-only, hash-chained audit log and a PDF recall report | `apps/api/src/core.ts`, `recall.ts` |
 
-## Run it
+## Try it in one command
+
+```bash
+docker compose up        # then open http://localhost:4000
+DATASET=large docker compose up   # same, with 500 patients and about 5,000 generated fills
+```
+
+Sign in as the pharmacist, `j.rivera@elmstreetrx.example` / `moonlight-rx-2026`, and pick one of five **Demo scenarios** on the Today screen: a Class I recall, a recall for a lot the store never had, a fax with a misread lot, receiving problems, and a suspect product. Each one resets the data and tells you what to try. A pharmacist can also **Reset demo** there.
+
+The Docker build was written but not run on the machine that produced this repo (its Docker daemon was unreachable); the same app was built and served locally with `pnpm build:web` and `pnpm --filter @chimera-rx/api start`.
+
+## Evidence
+
+| Claim | Where | Command |
+| --- | --- | --- |
+| Lot extraction on 50 real 2025 openFDA recall records | [docs/evidence/accuracy.md](docs/evidence/accuracy.md) | `pnpm evidence:accuracy` |
+| Recall to affected-patient list timing, and lot-capture rate | [docs/evidence/timing.md](docs/evidence/timing.md) | `pnpm evidence:timing` |
+| How Kiro was used and what was not verified | [docs/KIRO_USAGE.md](docs/KIRO_USAGE.md) | |
+
+The timing is server work over the real HTTP routes, not a person using a browser. Both reports say what they do not show.
+
+## Run it from source
 
 Needs Node 22.5+ and pnpm 12.
 

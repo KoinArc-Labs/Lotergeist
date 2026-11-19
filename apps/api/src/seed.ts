@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Config } from "./config";
 import type { Db } from "./db";
+import { generateHistory } from "./dataset";
 import { DAY, gtinOf, hashPassword, monthEnd, ndc11Digits, rng, suggestLocation, type PackageStatus, type Storage } from "./domain";
 
 /**
@@ -319,6 +320,7 @@ export function seedDatabase(db: Db, cfg: Config, now = Date.now()) {
     db.run("INSERT INTO meta (key, value) VALUES ('seed_version', ?)", SEED_VERSION);
     db.run("INSERT INTO meta (key, value) VALUES ('last_sync', ?)", String(now - 2 * 60_000));
   });
+  if (cfg.dataset === "large") generateHistory(db);
   return true;
 }
 

@@ -54,12 +54,19 @@ No MCP server was used to build this repo. Chimera Rx *exposes* an MCP endpoint 
 
 `scripts/e2e/demo-e2e.mjs` swaps `getUserMedia` for a canvas that holds up generated DataMatrix labels and a printed text label, then drives the real UI: scan, put-away, a bad serial reported as a problem, label OCR, a fill, and the fax-OCR recall through to messages sent. 13 of 13 checks passed on the last run. **This is not a test of a physical webcam, lighting or print quality.**
 
+## AI-DLC record
+
+The judge-ready pilot was planned with AI-DLC (the `aidlc/` folder and `.kiro/aidlc-common`, `.kiro/skills/aidlc`). Its record for this intent, `aidlc/spaces/default/intents/261116-judge-ready-pilot/`, holds the intent statement, feasibility, scope, rough mockups, the reverse-engineering code knowledge base (`aidlc/spaces/default/codekb/Kiroween/`), practices, requirements and user stories.
+
+**Gap, stated plainly:** the run reached User Stories. The stories, the traceability file and the Must-priority build (scenarios, the generated dataset, the evidence scripts, Docker, Codespaces config) were written in one session from those requirements, outside the AI-DLC approval gates, because this tool could not record gate approvals. The later AI-DLC stages (domain design, units, contracts, delivery planning, functional and NFR design, code generation records, build and test, CI) were not run. The Should and Could items (front-store register, two stores, second factor, AI stock help) are not built.
+
 ## Not done
+
 
 - Per-module Kiro specs for the Chimera Rx modules.
 - A live LLM run (the LLM paths were exercised with test doubles only).
 - A physical webcam test.
-- Hosting, the submission video.
+- Hosting (judges run it locally with Docker), the submission video, and a run of the Docker build on a machine with a working Docker daemon.
 
 ## Usage log
 

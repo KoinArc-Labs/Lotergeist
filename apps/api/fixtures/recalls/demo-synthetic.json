@@ -28,5 +28,25 @@
     "reason_for_recall": "Temperature excursion during distribution; potency cannot be assured.",
     "recalling_firm": "Nightjar Biologics (synthetic)",
     "report_date": "20261104"
+  },
+  {
+    "recall_number": "D-0611-2026",
+    "classification": "Class I",
+    "status": "Ongoing",
+    "product_description": "Insulin Glargine 100 units/mL, 5 x 3 mL prefilled pens",
+    "code_info": "Lot No. GX4471C exp 08/2027; NDC 70004-623-15",
+    "reason_for_recall": "Particulate matter found in pens from one lot; risk of under-dosing.",
+    "recalling_firm": "Nightjar Biologics (synthetic)",
+    "report_date": "20261118"
+  },
+  {
+    "recall_number": "D-0650-2026",
+    "classification": "Class II",
+    "status": "Ongoing",
+    "product_description": "Levothyroxine Sodium Tablets, USP, 50 mcg, 30 count bottles",
+    "code_info": "Lot No. LV2611A exp 12/2027; NDC 70005-100-90",
+    "reason_for_recall": "Subpotent: assay results below specification at the 12-month stability point. Synthetic record for the timing run.",
+    "recalling_firm": "Pale Harbor Pharma (synthetic)",
+    "report_date": "20261118"
   }
 ]

@@ -19,6 +19,8 @@ export interface Config {
   cookieSecure: boolean;
   /** YYYY-MM-DD override for "today" (tests) */
   today?: string;
+  /** "large" adds the generated 6-month history (FR5) on top of the demo seed */
+  dataset: "demo" | "large";
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env, o: Partial<Config> = {}): Config {
@@ -39,6 +41,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     demo: env.LG_DEMO !== "0",
     cookieSecure: env.COOKIE_SECURE === "1",
     today: env.TODAY || undefined,
+    dataset: env.DATASET === "large" ? "large" : "demo",
     ...o
   };
 }
