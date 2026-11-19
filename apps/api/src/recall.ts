@@ -71,7 +71,7 @@ export async function lookupRecall(ctx: Ctx, actor: Actor | null, input: { numbe
   }
 
   // Extraction (regex first, optional LLM second). It can only return strings found in the source text (COR-3).
-  const a = await autopsy(`${rec.product_description}\n${rec.code_info}`, { llm: createLlmFromEnv() });
+  const a = await autopsy(`${rec.product_description}\n${rec.code_info}`, { llm: "llm" in ctx ? ctx.llm : createLlmFromEnv() }); // follows the live provider choice when the server set one
   const ndc = a.ndcs[0] ? ndcFromAny(a.ndcs[0].value)?.ndc11 ?? "" : "";
   for (const l of a.lots) {
     ctx.db.run("INSERT OR IGNORE INTO recall_lots (recall_id, lot, ndc11, expiry, confidence, source) VALUES (?,?,?,?,?,?)", id, l.value, ndc, l.expiry ?? "", l.confidence, l.source);

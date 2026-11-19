@@ -12,6 +12,7 @@ export const SCOPES = {
   "inventory.read": "Stock by product, with lot and expiry for FHIR Medication",
   "recall.read": "Whether this store holds recalled lots",
   "rx.change": "Read and answer prescriber change requests",
+  "agents.read": "Run the read-only AI agents: overnight digest, stock advice, copilot. Output is labelled advisory",
   "patient.read": "Patient medication history. Needs a signed BAA and admin approval"
 } as const;
 export type Scope = keyof typeof SCOPES;

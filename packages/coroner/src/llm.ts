@@ -63,6 +63,9 @@ export class AnthropicClient implements LlmClient {
   }
 }
 
+/** The AWS SDK lives in this package; other packages load it through here (and tests stub it). */
+export const loadBedrockSdk = () => import("@aws-sdk/client-bedrock-runtime");
+
 export class BedrockClient implements LlmClient {
   readonly name = "bedrock";
   constructor(private region: string, private modelId: string) {}

@@ -23,6 +23,8 @@ export interface Ctx {
   stores?: import("./stores").StoreRegistry;
   /** voice provider for outreach */
   voice?: import("./voice").VoiceProvider;
+  /** the live AI provider choice for the agents (agents/providers.ts). Absent = built from the environment on first use */
+  agents?: import("./agents/providers").AgentRuntime;
 }
 
 export const todayIso = (ctx: Ctx) => ctx.cfg.today ?? new Date(ctx.now()).toISOString().slice(0, 10);
