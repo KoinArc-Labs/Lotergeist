@@ -24,6 +24,9 @@ export function SignIn() {
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mfa, setMfa] = useState<{ challenge: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [hint, setHint] = useState<string | null>(null);
   const demo = cfg.data?.demo;
   const store = cfg.data?.stores?.[0];
   useEffect(() => { if (demo && !email) { setEmail(demo.email); setPassword(demo.password); } }, [demo]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -31,7 +34,18 @@ export function SignIn() {
   const done = () => qc.invalidateQueries({ queryKey: ["me"] });
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setErr("");
-    try { await post("/api/auth/login", { storeId: store?.id ?? "store-7", email, password, trusted }); await done(); } catch (x) { setErr(msg(x)); } finally { setBusy(false); }
+    try {
+      const r = await post<{ mfaRequired?: boolean; challenge?: string }>("/api/auth/login", { storeId: store?.id ?? "store-7", email, password, trusted });
+      if (r.mfaRequired && r.challenge) { setMfa({ challenge: r.challenge }); setCode(""); return; }
+      await done();
+    } catch (x) { setErr(msg(x)); } finally { setBusy(false); }
+  }
+  async function verify(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true); setErr("");
+    try { await post("/api/auth/verify", { challenge: mfa!.challenge, code }); await done(); } catch (x) { setErr(msg(x)); } finally { setBusy(false); }
+  }
+  async function showCode() {
+    try { const r = await get<{ code: string | null }>(`/api/auth/demo-code/${mfa!.challenge}`); setHint(r.code ?? "No code is waiting. Sign in again."); } catch (x) { setHint(msg(x)); }
   }
   async function sso() {
     setBusy(true); setErr("");
@@ -68,6 +82,27 @@ export function SignIn() {
 
       <section style={{ flex: "1 1 480px", minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24, padding: "28px 24px 48px", background: C.bg, position: "relative" }}>
         <div style={{ position: "absolute", top: 20, right: 24 }}><ThemeSwitch /></div>
+        {mfa ? (
+          <form onSubmit={verify} style={{ width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", gap: 22 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>Enter your code</h2>
+              <p style={{ margin: 0, color: C.dim, fontSize: 15 }}>We sent a 6-digit code to the sandbox outbox. It works once and expires in 5 minutes.</p>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <label htmlFor="code" style={lbl}>6-digit code</label>
+              <input id="code" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} style={{ ...field, letterSpacing: "0.4em", fontSize: 22, textAlign: "center" }} />
+            </div>
+            <ErrorBox e={err} />
+            <button disabled={busy || code.length !== 6} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 50, borderRadius: 10, border: 0, background: C.violet, color: C.onAccent, fontWeight: 600, fontSize: 15 }}>{busy ? "Checking…" : "Verify and sign in"}</button>
+            {demo && (
+              <div style={{ fontSize: 13, color: C.dim, display: "flex", flexDirection: "column", gap: 6 }}>
+                <span>Demo: no real message is sent. <a href="#" onClick={(e) => { e.preventDefault(); void showCode(); }}>Show the code from the sandbox outbox</a>.</span>
+                {hint && <strong role="status" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 20, color: C.ink }}>{hint}</strong>}
+              </div>
+            )}
+            <button type="button" onClick={() => { setMfa(null); setHint(null); setErr(""); }} style={{ background: "transparent", border: 0, color: C.dim, fontSize: 14, textDecoration: "underline", minHeight: 44 }}>Back to sign in</button>
+          </form>
+        ) : (
         <form onSubmit={submit} style={{ width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", gap: 22 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" }}>Sign in</h2>
@@ -101,14 +136,15 @@ export function SignIn() {
           <ErrorBox e={err} />
           <button disabled={busy} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 50, borderRadius: 10, border: 0, background: C.violet, color: C.onAccent, fontWeight: 600, fontSize: 15 }}>{busy ? "Signing in…" : "Sign in"}</button>
           <div style={{ display: "flex", alignItems: "center", gap: 12, color: C.dimmer, fontSize: 12 }}><span style={{ flex: 1, height: 1, background: C.track }} />or<span style={{ flex: 1, height: 1, background: C.track }} /></div>
-          <button type="button" onClick={sso} disabled={busy || !demo} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, height: 50, borderRadius: 10, border: `1px solid ${C.line2}`, background: C.card, color: C.ink, fontWeight: 500, fontSize: 15 }}>
+          <button type="button" onClick={sso} disabled={busy || !demo || !!cfg.data?.mfa} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, height: 50, borderRadius: 10, border: `1px solid ${C.line2}`, background: C.card, color: C.ink, fontWeight: 500, fontSize: 15 }}>
             <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="var(--accent-text)" strokeWidth="1.6" aria-hidden="true"><rect x="4" y="9" width="12" height="8" rx="2" /><path d="M7 9V6a3 3 0 016 0v3" /></svg>Continue with badge tap or SSO
           </button>
           <p style={{ margin: 0, fontSize: 12, lineHeight: 1.6, color: C.dimmer }}>
-            Access is logged to the audit trail. Demo: badge/SSO signs in the pharmacist and no second factor is set up.
+            Access is logged to the audit trail. {cfg.data?.mfa ? "A 6-digit code follows your password (sandbox outbox only)." : "Demo: badge/SSO signs in the pharmacist and no second factor is set up. Start the server with MFA=1 to turn the second factor on."}
             {demo && <> Other demo staff: <a href="#" onClick={(e) => { e.preventDefault(); setEmail("k.patel@elmstreetrx.example"); setPassword(demo.password); }}>technician</a> · <a href="#" onClick={(e) => { e.preventDefault(); setEmail("m.diaz@elmstreetrx.example"); setPassword(demo.password); }}>cashier</a> · <a href="#" onClick={(e) => { e.preventDefault(); setEmail("s.grant@elmstreetrx.example"); setPassword(demo.password); }}>admin</a>.</>}
           </p>
         </form>
+        )}
       </section>
     </div>
     </>

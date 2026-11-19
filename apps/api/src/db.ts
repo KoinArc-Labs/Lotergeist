@@ -29,9 +29,22 @@ export class Db {
   run(sql: string, ...p: unknown[]) {
     return this.raw.prepare(sql).run(...clean(p));
   }
+  private depth = 0;
+  /** Transactions nest: an inner failure rolls back to its savepoint, an outer failure rolls back everything. */
   tx<T>(fn: () => T): T {
-    this.raw.exec("BEGIN");
-    try { const out = fn(); this.raw.exec("COMMIT"); return out; } catch (e) { this.raw.exec("ROLLBACK"); throw e; }
+    const sp = `sp${this.depth}`;
+    this.raw.exec(this.depth === 0 ? "BEGIN" : `SAVEPOINT ${sp}`);
+    this.depth++;
+    try {
+      const out = fn();
+      this.depth--;
+      this.raw.exec(this.depth === 0 ? "COMMIT" : `RELEASE ${sp}`);
+      return out;
+    } catch (e) {
+      this.depth--;
+      this.raw.exec(this.depth === 0 ? "ROLLBACK" : `ROLLBACK TO ${sp}; RELEASE ${sp}`);
+      throw e;
+    }
   }
 
   private migrate() {
@@ -144,6 +157,11 @@ export class Db {
       );
       CREATE TABLE IF NOT EXISTS oauth_tokens (token_hash TEXT PRIMARY KEY, integration_id TEXT, scopes TEXT, expires INTEGER, created INTEGER);
       CREATE TABLE IF NOT EXISTS webhook_inbox (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, event TEXT, verified INTEGER, body TEXT);
+      CREATE TABLE IF NOT EXISTS mfa_codes (challenge TEXT PRIMARY KEY, user_id TEXT, code_hash TEXT, expires INTEGER, used INTEGER DEFAULT 0, tries INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS otc_items (upc TEXT PRIMARY KEY, name TEXT, price_cents INTEGER);
+      CREATE TABLE IF NOT EXISTS sales (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, cashier TEXT, store_id TEXT, patient_id TEXT, status TEXT, total_cents INTEGER);
+      CREATE TABLE IF NOT EXISTS sale_lines (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id INTEGER, kind TEXT, upc TEXT, dispense_id INTEGER, name TEXT, qty INTEGER, price_cents INTEGER, rx TEXT, lot TEXT, serial TEXT);
+      CREATE TABLE IF NOT EXISTS stock_decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, item_key TEXT, decision TEXT, by TEXT, at INTEGER, UNIQUE(kind, item_key));
       CREATE TABLE IF NOT EXISTS audio (id TEXT PRIMARY KEY, mime TEXT, bytes BLOB, voice TEXT, text TEXT, at INTEGER);
     `);
     const addColumn = (table: string, col: string, def: string) => {

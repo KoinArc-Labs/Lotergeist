@@ -7,6 +7,7 @@ services:
       - "4000:4000"
     environment:
       DATASET: ${DATASET:-demo}
+      MFA: ${MFA:-0}
       LLM_PROVIDER: none
       LG_DEMO: "1"
     volumes:

@@ -13,6 +13,8 @@ import { Labels } from "./screens/Labels";
 import { Outbox } from "./screens/Outbox";
 import { Patients } from "./screens/Patients";
 import { Integrations } from "./screens/Integrations";
+import { Register } from "./screens/Register";
+import { StockHelp } from "./screens/StockHelp";
 
 export function App() {
   const qc = useQueryClient();
@@ -36,6 +38,8 @@ export function App() {
         <Route path="/inventory" element={<Inventory user={user} />} />
         <Route path="/fill" element={<Fill user={user} />} />
         <Route path="/recalls" element={<Recalls user={user} />} />
+        <Route path="/register" element={<Register user={user} />} />
+        <Route path="/stock" element={<StockHelp user={user} />} />
         <Route path="/labels" element={<Labels />} />
         <Route path="/outbox" element={<Outbox />} />
         <Route path="*" element={<Navigate to="/" replace />} />

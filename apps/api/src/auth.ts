@@ -9,6 +9,12 @@ export interface SessionUser { id: string; firstName: string; name: string; role
 const toUser = (u: any): SessionUser => ({ id: u.id, firstName: u.first_name ?? u.name, name: u.name, role: u.role, initials: u.initials, title: u.title, tint: u.tint, storeId: u.store_id, email: u.email });
 
 export function login(ctx: Ctx, body: { storeId: string; email: string; password: string; trusted: boolean; workstation: string }) {
+  const u = checkPassword(ctx, body);
+  return openSession(ctx, u, body.trusted, body.workstation);
+}
+
+/** Password step. Throws on a wrong password; with MFA on, the caller then asks for the code (FR7). */
+export function checkPassword(ctx: Ctx, body: { storeId: string; email: string; password: string }) {
   const u = ctx.db.get<any>("SELECT * FROM users WHERE lower(email) = lower(?)", body.email.trim());
   const now = ctx.now();
   // The same wording for "no such user" and "wrong password": do not reveal which staff emails exist.
@@ -28,9 +34,14 @@ export function login(ctx: Ctx, body: { storeId: string; email: string; password
     throw new HttpError(401, `Email or password is incorrect. ${LOCK_AFTER - failed} attempt${LOCK_AFTER - failed === 1 ? "" : "s"} left.`, "bad_credentials");
   }
   ctx.db.run("UPDATE users SET failed = 0, locked_until = 0 WHERE id = ?", u.id);
+  return u;
+}
+
+export function openSession(ctx: Ctx, u: any, trusted: boolean, workstation: string) {
+  const now = ctx.now();
   const token = newToken();
-  const ttl = body.trusted ? 12 * 3_600_000 : 2 * 3_600_000; // "trust this workstation for 12 hours"
-  ctx.db.run("INSERT INTO sessions (token, user_id, created, expires, trusted, workstation) VALUES (?,?,?,?,?,?)", token, u.id, now, now + ttl, body.trusted ? 1 : 0, body.workstation);
+  const ttl = trusted ? 12 * 3_600_000 : 2 * 3_600_000; // "trust this workstation for 12 hours"
+  ctx.db.run("INSERT INTO sessions (token, user_id, created, expires, trusted, workstation) VALUES (?,?,?,?,?,?)", token, u.id, now, now + ttl, trusted ? 1 : 0, workstation);
   return { token, ttl, user: toUser(u) };
 }
 

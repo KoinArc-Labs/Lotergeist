@@ -6,7 +6,10 @@ import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { z, ZodError } from "zod";
 import { parseElementString } from "@chimera-rx/gs1";
-import { actorFromToken, login, logout, type SessionUser } from "./auth";
+import { actorFromToken, checkPassword, login, logout, openSession, type SessionUser } from "./auth";
+import { checkCode, demoCodeHint, startChallenge } from "./mfa";
+import { completeSale, findItems, findPatients, readyForPatient } from "./register";
+import { decide as decideStock, stockHelp } from "./stockhelp";
 import { audit, HttpError, todayIso, verifyAuditChain, type Actor, type Ctx } from "./core";
 import { draftPrescriberMessage, reviewPending, reviewRx, reviewView } from "./rxwatcher";
 import { decide, listMessages, proposeFix, respond } from "./prescriber";
@@ -48,10 +51,10 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
   });
 
   // ---- sessions: everything under /api needs one, except sign-in and the public config
-  const PUBLIC = new Set(["/api/health", "/api/auth/login", "/api/auth/sso", "/api/auth/config", "/api/auth/logout"]);
+  const PUBLIC = new Set(["/api/health", "/api/auth/login", "/api/auth/sso", "/api/auth/config", "/api/auth/logout", "/api/auth/verify", "/api/auth/demo-code"]);
   app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
     const url = req.url.split("?")[0]!;
-    if (!url.startsWith("/api/") || PUBLIC.has(url)) return;
+    if (!url.startsWith("/api/") || PUBLIC.has(url) || url.startsWith("/api/auth/demo-code/")) return;
     const s = actorFromToken(ctx, req.cookies[COOKIE]);
     if (!s) return reply.code(401).send({ error: "Please sign in.", code: "unauthenticated" });
     req.actor = s.actor;
@@ -67,6 +70,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
   // ---- auth
   app.get("/api/auth/config", async () => ({
     stores: ctx.db.all<{ id: string; name: string }>("SELECT id, name FROM stores"),
+    mfa: ctx.cfg.mfa,
     demo: ctx.cfg.demo ? { email: "j.rivera@elmstreetrx.example", password: "moonlight-rx-2026", note: "Demo environment: staff accounts j.rivera, k.patel and m.diaz share this password." } : null
   }));
   const loginBody = z.object({ storeId: z.string(), email: z.string().min(3).max(120), password: z.string().min(1).max(200), trusted: z.boolean().optional() });
@@ -74,14 +78,38 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
   app.post("/api/auth/login", async (req, reply) => {
     const b = loginBody.parse(req.body);
     const ws = `${req.headers["user-agent"]?.includes("Mac") ? "Mac" : "PC"} workstation · ${req.ip}`;
+    if (ctx.cfg.mfa) {
+      // Second factor (FR7): the password is right, so a 6-digit code goes to the sandbox outbox and no session exists yet.
+      const u = checkPassword(ctx, b);
+      const c = startChallenge(ctx, u);
+      ctx.db.run("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", `mfa_trust:${c.challenge}`, JSON.stringify({ trusted: !!b.trusted, ws }));
+      return reply.code(202).send({ mfaRequired: true, challenge: c.challenge, expiresAt: c.expiresAt, demoHint: ctx.cfg.demo });
+    }
     const r = login(ctx, { ...b, trusted: !!b.trusted, workstation: ws });
     setCookie(reply, r.token, r.ttl);
     audit(ctx, { id: r.user.id, name: r.user.name, role: r.user.role, storeId: r.user.storeId, workstation: ws }, "auth.login", "user", r.user.id);
     return { user: r.user };
   });
+  app.post("/api/auth/verify", async (req, reply) => {
+    const b = z.object({ challenge: z.string().min(10).max(100), code: z.string().regex(/^\d{6}$/, "The code is 6 digits.") }).parse(req.body);
+    const userId = checkCode(ctx, b.challenge, b.code);
+    const meta = JSON.parse(ctx.db.get<{ value: string }>("SELECT value FROM meta WHERE key = ?", `mfa_trust:${b.challenge}`)?.value ?? "{}") as { trusted?: boolean; ws?: string };
+    ctx.db.run("DELETE FROM meta WHERE key = ?", `mfa_trust:${b.challenge}`);
+    const u = ctx.db.get<any>("SELECT * FROM users WHERE id = ?", userId)!;
+    const r = openSession(ctx, u, !!meta.trusted, meta.ws ?? "workstation");
+    setCookie(reply, r.token, r.ttl);
+    audit(ctx, { id: r.user.id, name: r.user.name, role: r.user.role, storeId: r.user.storeId, workstation: meta.ws ?? "workstation" }, "auth.login_mfa", "user", r.user.id);
+    return { user: r.user };
+  });
+  // Demo only (FR7.3): shows the code from the sandbox outbox on the sign-in page, since a judge has no inbox to read.
+  app.get("/api/auth/demo-code/:challenge", async (req) => {
+    if (!ctx.cfg.demo || !ctx.cfg.mfa) throw new HttpError(404, "Not available.");
+    return { code: demoCodeHint(ctx, (req.params as { challenge: string }).challenge) };
+  });
   // Demo stand-in for "badge tap or SSO": signs in the pharmacist on duty. Disabled outside demo mode.
   app.post("/api/auth/sso", async (req, reply) => {
     if (!ctx.cfg.demo) throw new HttpError(501, "SSO is not configured.");
+    if (ctx.cfg.mfa) throw new HttpError(501, "The badge stand-in skips the second factor, so it is off while MFA is on.");
     const r = login(ctx, { storeId: "store-7", email: "j.rivera@elmstreetrx.example", password: "moonlight-rx-2026", trusted: false, workstation: `SSO badge · ${req.ip}` });
     setCookie(reply, r.token, r.ttl);
     return { user: r.user };
@@ -294,6 +322,19 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     await resetDemo(ctx, A(req));
     return { ok: true };
   });
+  // ---- front-store register (FR3)
+  app.get("/api/register/items", async (req) => findItems(ctx, A(req), String((req.query as { q?: string }).q ?? "")));
+  app.get("/api/register/patients", async (req) => findPatients(ctx, A(req), String((req.query as { q?: string }).q ?? "")));
+  app.get("/api/register/patients/:id", async (req) => readyForPatient(ctx, A(req), (req.params as { id: string }).id));
+  app.post("/api/register/sales", async (req) => completeSale(ctx, A(req), z.object({
+    patientId: z.string().max(20).optional(), items: z.array(z.object({ upc: z.string().max(20), qty: z.number().int() })).max(40),
+    dispenseIds: z.array(z.number().int()).max(20), idChecked: z.boolean().optional(), counseled: z.boolean().optional(), signature: z.boolean().optional()
+  }).parse(req.body)));
+
+  // ---- AI stock help (FR8): advice only, a pharmacist decides
+  app.get("/api/stock-help", async (req) => stockHelp(ctx, A(req)));
+  app.post("/api/stock-help/decision", async (req) => decideStock(ctx, A(req), z.object({ kind: z.enum(["reorder", "expiry", "shortage"]), key: z.string().max(80), decision: z.enum(["accepted", "dismissed"]) }).parse(req.body)));
+
   // ---- scenario library (FR6, US1.1): pick a known state from the app, no terminal needed
   app.get("/api/demo/scenarios", async () => listScenarios(ctx));
   app.post("/api/demo/scenarios/:id", async (req) => {

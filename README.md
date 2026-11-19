@@ -36,6 +36,12 @@ Sign in as the pharmacist, `j.rivera@elmstreetrx.example` / `moonlight-rx-2026`,
 
 The Docker build was written but not run on the machine that produced this repo (its Docker daemon was unreachable); the same app was built and served locally with `pnpm build:web` and `pnpm --filter @chimera-rx/api start`.
 
+## Also in this pilot
+
+- **Register** (cashier and pharmacist): over-the-counter items by retail barcode (USB scanner or camera) or name, plus one patient's verified prescriptions in the same sale. Prescriptions need photo ID, counseling and signature; unverified or recalled-lot fills are blocked by name. "Paid" is a label, no payment is processed, and over-the-counter stock is not tracked.
+- **Stock help** (technician sees, pharmacist decides): reorder, expiry-risk and shortage suggestions from rules, with the numbers shown. An LLM, if configured, only adds a plain-words explanation. Nothing is ordered or moved for you.
+- **Second sign-in factor**: `MFA=1 docker compose up` turns it on.
+
 ## Evidence
 
 | Claim | Where | Command |
@@ -107,7 +113,7 @@ docs/                  plan, architecture, safety, demo, how Kiro was used
 - SMS and email go to a sandbox outbox. Calls are simulated; nothing is dialled.
 - The prescriber channel is SCRIPT-shaped but sandboxed (no Surescripts).
 - The drug rules are a small curated table, not a licensed interaction database.
-- "Badge tap / SSO" signs in the pharmacist as a stand-in. There is no second factor.
+- "Badge tap / SSO" signs in the pharmacist as a stand-in. The second sign-in factor (a 6-digit code to the sandbox outbox) is built and tested but off by default; start with `MFA=1` to turn it on. While it is on, the badge stand-in is disabled.
 - The fridge temperature is simulated, and the screen says so.
 
 ## Not verified

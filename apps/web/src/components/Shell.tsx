@@ -64,6 +64,8 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
             {item("/", "Today", Icon.today())}
             {item("/receiving", "Receiving", Icon.truck(), badges.receiving ? <span className="count">{badges.receiving}</span> : null)}
             {item("/inventory", "Inventory", Icon.shelves())}
+            {(user.role === "cashier" || user.role === "pharmacist") && item("/register", "Register", Icon.tag())}
+            {(user.role === "technician" || user.role === "pharmacist") && item("/stock", "Stock help", Icon.shelves())}
             {item("/fill", "Fill & pickup", Icon.rx(), flagged ? <span className="count amber" aria-label={`${flagged} need review`}>{flagged}</span> : null)}
             <span className="nav-label">Care</span>
             {user.role !== "cashier" && item("/patients", "Patients", NavIcon.patients)}

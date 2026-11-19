@@ -21,6 +21,8 @@ export interface Config {
   today?: string;
   /** "large" adds the generated 6-month history (FR5) on top of the demo seed */
   dataset: "demo" | "large";
+  /** require a 6-digit code (sandbox outbox) after the password (FR7); off unless MFA=1 */
+  mfa: boolean;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env, o: Partial<Config> = {}): Config {
@@ -42,6 +44,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     cookieSecure: env.COOKIE_SECURE === "1",
     today: env.TODAY || undefined,
     dataset: env.DATASET === "large" ? "large" : "demo",
+    mfa: env.MFA === "1",
     ...o
   };
 }
