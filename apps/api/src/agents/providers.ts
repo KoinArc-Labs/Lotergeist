@@ -123,6 +123,7 @@ export class MockProvider implements ProviderClient {
       case "coroner": return mockCoroner(data);
       case "rx-explainer": return mockRx(data);
       case "outreach-drafter": return mockOutreach();
+      case "refill-outreach": return mockRefill();
       case "night-watch": return mockNightWatch(data);
       case "stock-advisor": return mockStock(data);
       case "copilot": return mockCopilot(data);
@@ -166,6 +167,15 @@ function mockOutreach(): string {
     emailSubject: "Important: please call us about your recent pickup",
     emailBody: "Dear {first_name},\n\nOn {sold_date} you picked up a medicine from Elm Street Pharmacy that the maker has recalled. Please do not use any remaining doses. Call us at {pharmacy_phone} or visit the pharmacy and we will replace it at no cost.\n\nYour pharmacist",
     voicemail: "Hello {first_name}. This is your pharmacist at Elm Street Pharmacy. I'm calling about something you picked up from us on {sold_date}. It's important, but it is not an emergency. Please call us back at {pharmacy_phone} so we can talk it over and take care of it for you at no cost. Again, that number is {pharmacy_phone}. Thank you."
+  });
+}
+
+function mockRefill(): string {
+  return JSON.stringify({
+    sms: "Elm Street Pharmacy: Hi {first_name}, it is almost time for your next refill. Call {pharmacy_phone} and we will get it ready for you. Reply STOP to opt out.",
+    emailSubject: "A friendly reminder about your refill",
+    emailBody: "Dear {first_name},\n\nYour {drug_name} is ready to be refilled. Call us at {pharmacy_phone} or stop by and we will have it waiting for you.\n\nYour pharmacy team at Elm Street Pharmacy",
+    voicemail: "Hello {first_name}. This is {pharmacist} at Elm Street Pharmacy. We have a refill waiting to be arranged for you. It is not an emergency. Please call us back at {pharmacy_phone} when you can. Again, that number is {pharmacy_phone}. Thank you."
   });
 }
 

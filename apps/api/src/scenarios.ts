@@ -1,5 +1,5 @@
-import { audit, HttpError, type Actor, type Ctx } from "./core";
-import { gtinOf } from "./domain";
+import { audit, HttpError, todayIso, type Actor, type Ctx } from "./core";
+import { gtinOf, ndc11Digits } from "./domain";
 import { seedPartners } from "./integrations";
 import { reviewPending } from "./rxwatcher";
 import { seedDatabase } from "./seed";
@@ -37,6 +37,15 @@ export const SCENARIOS: Scenario[] = [
       "Nightjar Biologics recalls insulin glargine lot GX4471C (D-0611-2026, Class I, synthetic). Open Recalls, enter D-0611-2026 and look it up. " +
       "The lot has an expiry and high confidence, so it is confirmed for you and every on-shelf pen moves to quarantine. The impact list shows the patients " +
       "who took a pen home, because the lot was scanned at fill. Draft the messages, tick the attestation and send: they land in the sandbox outbox only."
+  },
+  {
+    id: "recall-aware-refill",
+    title: "Recall-aware refill",
+    start: "/refills",
+    brief:
+      "Open Refills. Priya Natarajan's insulin glargine is due and offered, and James Okafor's oxycodone says it needs a new prescription (Schedule II is never refilled automatically). " +
+      "Grace Miller has a one-trip sync suggestion with short fills. Thomas Reyes is flagged for low adherence (PDC under 80%). Now open Recalls and look up D-0611-2026 (insulin glargine lot GX4471C, synthetic). " +
+      "Back on Refills, Priya's row turns red: her last fill came from the recalled lot, so no refill is offered and the row links to the recall. Draft reminders for everyone else and approve them: the recalled row gets no reminder."
   },
   {
     id: "not-received",
@@ -84,7 +93,25 @@ const EXTRA_LABELS: Record<string, ScenarioLabel[]> = {
   ]
 };
 
+/** Synthetic fill history for the "Recall-aware refill" scenario, dated back from today. [patient, ndc10, drug, lot, daysAgo, daysSupply, refillsLeft] */
+const REFILL_HISTORY: [string, string, string, string, number, number, number][] = [
+  ["S-0490", "70004-623-15", "Insulin glargine 100 U/mL", "GX4471C", 62, 30, 3], ["S-0490", "70004-623-15", "Insulin glargine 100 U/mL", "GX4471C", 32, 30, 2],
+  ["S-0490", "70004-802-10", "Metformin ER 500 mg", "MF2604K", 61, 30, 4], ["S-0490", "70004-802-10", "Metformin ER 500 mg", "MF2604K", 31, 30, 3],
+  ["S-0423", "70004-310-10", "Oxycodone HCl 5 mg", "OX25L072", 28, 30, 0], ["S-0423", "70004-801-90", "Lisinopril 10 mg", "LS0811A", 65, 30, 3], ["S-0423", "70004-801-90", "Lisinopril 10 mg", "LS0811A", 35, 30, 2],
+  ["S-0502", "70004-801-90", "Lisinopril 10 mg", "LS0811A", 33, 30, 5], ["S-0502", "70004-801-90", "Lisinopril 10 mg", "LS0811A", 63, 30, 6],
+  ["S-0502", "70004-804-30", "Sertraline 50 mg", "SR0610B", 14, 30, 4], ["S-0502", "70004-145-90", "Amlodipine 5 mg", "AM1107B", 20, 30, 4],
+  ["S-0519", "70004-803-90", "Atorvastatin 20 mg", "AT24K118", 170, 30, 5], ["S-0519", "70004-803-90", "Atorvastatin 20 mg", "AT24K118", 120, 30, 4], ["S-0519", "70004-803-90", "Atorvastatin 20 mg", "AT24K118", 60, 30, 3]
+];
+
 const APPLY: Record<string, (ctx: Ctx) => void> = {
+  "recall-aware-refill": (ctx) => {
+    const today = todayIso(ctx);
+    for (const [pid, ndc10, drug, lot, ago, days, left] of REFILL_HISTORY) {
+      const on = new Date(Date.parse(`${today}T00:00:00Z`) - ago * 86_400_000).toISOString().slice(0, 10);
+      ctx.db.run("INSERT INTO med_history (patient_id, filled_on, ndc11, drug, sig, lot, prescriber, qty, days_supply, status, auto_refill, refills_left) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        pid, on, ndc11Digits(ndc10), drug, "As directed", lot, "Dr. L. Moreno", days, days, "Active", 0, left);
+    }
+  },
   "misread-fax": (ctx) => {
     const text = [
       "URGENT: DRUG RECALL", "Recall No. D-0417-2026", "Classification: Class II",

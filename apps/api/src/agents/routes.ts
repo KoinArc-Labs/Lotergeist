@@ -7,6 +7,7 @@ import "./outreach";
 import "./nightwatch";
 import "./stock";
 import "./copilot";
+import "./refills";
 import { ADVISORY_LABEL, allAgents, canRun, getAgent, listRuns, runAgent, sampleFor } from "./agent";
 import { draftQueue } from "./outreach";
 import { PROVIDER_IDS, runtimeOf } from "./providers";

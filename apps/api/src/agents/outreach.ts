@@ -2,6 +2,7 @@ import { z } from "zod";
 import { HttpError, type Actor, type Ctx } from "../core";
 import { checkScript, DEFAULT_VOICEMAIL, spokenPhone } from "../outreach";
 import { DEFAULT_EMAIL_BODY, DEFAULT_EMAIL_SUBJECT, DEFAULT_SMS, merge, PHARMACY_PHONE, recallImpact, type ImpactPatient } from "../recall";
+import { refillFields, refillReport } from "../refills";
 import { ensureTables, findPhi, parseJsonObject, registerAgent, type AgentResult, type Dropped, type LlmCall } from "./agent";
 
 /**
@@ -58,7 +59,7 @@ export function pieceProblem(ctx: Ctx, piece: Piece, text: unknown): string | nu
 }
 
 /** Does `text` (a draft for `recipient`) name some other patient? */
-function namesOtherPatient(ctx: Ctx, text: string, recipient: string): boolean {
+export function namesOtherPatient(ctx: Ctx, text: string, recipient: string): boolean {
   const low = text.toLowerCase();
   const mine = new Set((ctx.db.get<{ name: string }>("SELECT name FROM patients WHERE id = ?", recipient)?.name ?? "").toLowerCase().split(/\s+/));
   for (const p of ctx.db.all<{ id: string; name: string }>("SELECT id, name FROM patients WHERE id <> ?", recipient)) {
@@ -167,7 +168,15 @@ export function draftQueue(ctx: Ctx, recallId?: string) {
   const rows = ctx.db.all<{ id: number; recall_id: string; patient_id: string; channel: string; subject: string | null; body: string; status: string; created_at: number }>(
     `SELECT * FROM ai_drafts WHERE status = 'draft' ${recallId ? "AND recall_id = ?" : ""} ORDER BY id DESC LIMIT 200`, ...(recallId ? [recallId] : []));
   const impacts = new Map<string, Map<string, ImpactPatient>>();
+  let refills: ReturnType<typeof refillReport> | null = null;
   return rows.map((r) => {
+    if (r.recall_id === "REFILL") {
+      // Refill reminders (agents/refills.ts) share this queue. The recipient's first name and drug are merged on read, never stored.
+      refills ??= refillReport(ctx);
+      const f = refillFields(ctx, r.patient_id, "your pharmacist", refills);
+      const m = { first_name: f.first_name, drug_name: f.drug_name, pharmacist: f.pharmacist, pharmacy_phone: r.channel === "voicemail" ? spokenPhone(PHARMACY_PHONE) : PHARMACY_PHONE };
+      return { id: r.id, recallId: r.recall_id, patientId: r.patient_id, channel: r.channel, subject: r.subject ? merge(r.subject, m) : r.subject, text: merge(r.body, m), status: r.status, createdAt: r.created_at, label: "Draft. A pharmacist reviews and sends." };
+    }
     if (!impacts.has(r.recall_id)) impacts.set(r.recall_id, new Map(recallImpact(ctx, r.recall_id, { includeUnconfirmed: true }).patients.map((p) => [p.id, p])));
     const p = impacts.get(r.recall_id)!.get(r.patient_id);
     const f = p ? fieldsFor(p, "your pharmacist", r.channel === "voicemail") : null;

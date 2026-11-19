@@ -47,7 +47,7 @@ const liar = (fn: (agent: string, system: string, user: string) => string): Prov
 });
 const sampleOf = (id: string) => (allAgents().find((a) => a.id === id)!.sample(ctx));
 const run = (id: string, input: unknown = sampleOf(id), actor: Actor | null = pharmacist) => runAgent(ctx, actor, id, input);
-const AGENT_IDS = ["coroner", "rx-explainer", "outreach-drafter", "night-watch", "stock-advisor", "copilot"];
+const AGENT_IDS = ["coroner", "rx-explainer", "outreach-drafter", "night-watch", "stock-advisor", "copilot", "refill-outreach"];
 
 describe("the six agents are registered with guardrails", () => {
   it("lists every agent, read-only, with guardrails and a sample", () => {
@@ -485,9 +485,9 @@ describe("agent routes", () => {
   it("GET /api/agents lists the six agents with what the caller may run", async () => {
     const r = (await call("k.patel", "GET", "/api/agents")).json();
     expect(r.label).toBe("AI advisory, a pharmacist decides");
-    expect(r.agents).toHaveLength(6);
+    expect(r.agents).toHaveLength(7);
     const can = Object.fromEntries(r.agents.map((a: any) => [a.id, a.canRun]));
-    expect(can).toMatchObject({ coroner: true, "stock-advisor": true, copilot: true, "rx-explainer": false, "outreach-drafter": false });
+    expect(can).toMatchObject({ coroner: true, "stock-advisor": true, copilot: true, "rx-explainer": false, "outreach-drafter": false, "refill-outreach": true });
     expect(r.canConfigure).toBe(false);
     expect((await call("m.diaz", "GET", "/api/agents")).json().agents.every((a: any) => !a.canRun)).toBe(true);
     expect((await app.inject({ url: "/api/agents" })).statusCode).toBe(401);
