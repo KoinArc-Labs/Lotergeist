@@ -1,5 +1,5 @@
 /** Sound is off by default and stays off with prefers-reduced-motion (UX-2). Tones are synthesised: no assets to ship. */
-const KEY = "bsrx.sound";
+const KEY = "chimera-rx.sound";
 let ctx: AudioContext | null = null;
 const listeners = new Set<() => void>();
 

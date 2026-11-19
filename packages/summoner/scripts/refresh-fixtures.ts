@@ -1,7 +1,7 @@
 /**
  * Pull real 2025 openFDA drug enforcement records with messy code_info and save the
  * 50 most interesting ones to fixtures/recalls/real-2025.json.
- * Usage: pnpm --filter @bsrx/summoner exec tsx scripts/refresh-fixtures.ts
+ * Usage: pnpm --filter @chimera-rx/summoner exec tsx scripts/refresh-fixtures.ts
  */
 import fs from "node:fs";
 import path from "node:path";

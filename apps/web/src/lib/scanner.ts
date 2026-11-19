@@ -11,6 +11,8 @@ export interface ScannerOptions {
   fps?: number;
   /** consecutive identical reads needed to accept a code (SOUL-3) */
   consecutive?: number;
+  /** "datamatrix" (default, GS1 on prescription packages) or "retail" (UPC and EAN on over-the-counter boxes, FR3) */
+  kind?: "datamatrix" | "retail";
 }
 
 export interface ScannerHandle {
@@ -23,20 +25,22 @@ export interface ScannerHandle {
 
 type Decoder = (canvas: HTMLCanvasElement) => Promise<string | null>;
 
-async function makeDecoder(): Promise<{ backend: ScannerHandle["backend"]; decode: Decoder }> {
+async function makeDecoder(kind: "datamatrix" | "retail" = "datamatrix"): Promise<{ backend: ScannerHandle["backend"]; decode: Decoder }> {
   const BD = (window as unknown as { BarcodeDetector?: { new (o: { formats: string[] }): { detect: (s: CanvasImageSource) => Promise<{ rawValue: string }[]> }; getSupportedFormats?: () => Promise<string[]> } }).BarcodeDetector;
   if (BD) {
     try {
       const formats = (await BD.getSupportedFormats?.()) ?? [];
-      if (formats.includes("data_matrix")) {
-        const det = new BD({ formats: ["data_matrix"] });
+      const want = kind === "retail" ? ["upc_a", "upc_e", "ean_13", "ean_8"] : ["data_matrix"];
+      const have = want.filter((f) => formats.includes(f));
+      if (have.length) {
+        const det = new BD({ formats: have });
         return { backend: "barcode-detector", decode: async (c) => (await det.detect(c))[0]?.rawValue ?? null };
       }
     } catch { /* fall through to zxing */ }
   }
   const { BrowserMultiFormatReader } = await import("@zxing/browser");
   const { DecodeHintType, BarcodeFormat } = await import("@zxing/library");
-  const hints = new Map<number, unknown>([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.DATA_MATRIX]], [DecodeHintType.TRY_HARDER, true]]);
+  const hints = new Map<number, unknown>([[DecodeHintType.POSSIBLE_FORMATS, kind === "retail" ? [BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.EAN_13, BarcodeFormat.EAN_8] : [BarcodeFormat.DATA_MATRIX]], [DecodeHintType.TRY_HARDER, true]]);
   const reader = new BrowserMultiFormatReader(hints as never);
   return {
     backend: "zxing",
@@ -61,7 +65,7 @@ export async function startScanner(opts: ScannerOptions): Promise<ScannerHandle>
   video.setAttribute("playsinline", "true");
   await video.play();
 
-  const { backend, decode } = await makeDecoder();
+  const { backend, decode } = await makeDecoder(opts.kind);
   const canvas = document.createElement("canvas");
   const ctx2d = canvas.getContext("2d", { willReadFrequently: true })!;
   const need = opts.consecutive ?? 2;

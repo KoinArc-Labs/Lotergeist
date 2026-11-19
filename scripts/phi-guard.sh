@@ -31,7 +31,7 @@ while IFS= read -r f; do
   # The clickable design prototype shows the synthetic demo patient (S-0612) with a labelled DOB on purpose.
   # Allow that one pattern there; SSNs are still blocked everywhere, including the prototype.
   pats=(-e "$SSN" -e "$DOB")
-  case "$f" in Lotergeist-prototype/*) pats=(-e "$SSN") ;; esac
+  case "$f" in prototype/*) pats=(-e "$SSN") ;; esac
   if grep -Eiq "${pats[@]}" <<<"$content"; then
     echo "phi-guard: $f looks like it contains PHI (SSN or labelled date of birth)." >&2
     grep -Ein "${pats[@]}" <<<"$content" | head -3 | sed 's/^/    /' >&2

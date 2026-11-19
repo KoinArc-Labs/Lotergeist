@@ -4,23 +4,25 @@ export interface Config {
   root: string;
   dataDir: string;
   fixturesDir: string;
-  port: number;
-  rxtermUrl: string;
-  rpaMode: "live" | "replay";
-  /** pause between RPA steps so the UI can show them streaming */
-  stepDelayMs: number;
-  weatherMode: "fixture" | "nws";
-  osrmUrl: string;
-  nwsUserAgent: string;
-  steeringPromptPath: string;
-  nightWatch: boolean;
-  nightWatchAutorun: boolean;
-  openfdaKey?: string;
-  cryptPath: string;
   sqlitePath: string;
+  port: number;
   webDist: string;
-  /** YYYY-MM-DD used for the SOUL-9 expiry check; defaults to the real date */
+  assetsDir: string;
+  openfdaKey?: string;
+  /** minimum months to expiry accepted at receiving */
+  minExpiryMonths: number;
+  nightWatch: boolean;
+  /** run delivery receipts of the sandbox SMS provider faster in tests */
+  sandboxDelayMs: number;
+  /** "demo" prefills the sign-in form; the API never trusts it */
+  demo: boolean;
+  cookieSecure: boolean;
+  /** YYYY-MM-DD override for "today" (tests) */
   today?: string;
+  /** "large" adds the generated 6-month history (FR5) on top of the demo seed */
+  dataset: "demo" | "large";
+  /** require a 6-digit code (sandbox outbox) after the password (FR7); off unless MFA=1 */
+  mfa: boolean;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env, o: Partial<Config> = {}): Config {
@@ -29,22 +31,20 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   return {
     root,
     dataDir,
-    fixturesDir: path.join(root, "fixtures"),
-    port: Number(env.API_PORT ?? 4000),
-    rxtermUrl: env.RXTERM_URL ?? `http://localhost:${env.RXTERM_PORT ?? 4100}`,
-    rpaMode: env.RPA_MODE === "replay" ? "replay" : "live",
-    stepDelayMs: Number(env.RPA_STEP_DELAY_MS ?? 140),
-    weatherMode: env.WEATHER_MODE === "nws" ? "nws" : "fixture",
-    osrmUrl: env.OSRM_URL ?? "",
-    nwsUserAgent: env.NWS_USER_AGENT ?? "BodySnatcherRx/0.1 (hackathon demo)",
-    steeringPromptPath: path.join(root, ".kiro/steering/coroner-prompt.md"),
-    nightWatch: env.NIGHT_WATCH !== "0",
-    nightWatchAutorun: env.NIGHT_WATCH_AUTORUN === "1",
-    openfdaKey: env.OPENFDA_API_KEY || undefined,
-    cryptPath: path.join(dataDir, "crypt.duckdb"),
-    sqlitePath: path.join(dataDir, "app.sqlite"),
+    fixturesDir: path.join(root, "apps/api/fixtures"),
+    sqlitePath: path.join(dataDir, "chimera-rx.sqlite"),
+    port: Number(env.LG_API_PORT ?? env.API_PORT ?? 4000),
     webDist: path.join(root, "apps/web/dist"),
+    assetsDir: path.join(root, "apps/web/public"),
+    openfdaKey: env.OPENFDA_API_KEY || undefined,
+    minExpiryMonths: Number(env.MIN_EXPIRY_MONTHS ?? 6),
+    nightWatch: env.NIGHT_WATCH !== "0",
+    sandboxDelayMs: Number(env.SANDBOX_DELAY_MS ?? 1500),
+    demo: env.LG_DEMO !== "0",
+    cookieSecure: env.COOKIE_SECURE === "1",
     today: env.TODAY || undefined,
+    dataset: env.DATASET === "large" ? "large" : "demo",
+    mfa: env.MFA === "1",
     ...o
   };
 }

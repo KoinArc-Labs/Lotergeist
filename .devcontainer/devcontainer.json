@@ -1,0 +1,12 @@
+{
+  "name": "Chimera Rx",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm",
+  "postCreateCommand": "npm install --global pnpm@12.16.1 && pnpm install --frozen-lockfile && pnpm setup",
+  "postStartCommand": "nohup pnpm dev > /tmp/chimera-dev.log 2>&1 &",
+  "forwardPorts": [5173, 4000],
+  "portsAttributes": {
+    "5173": { "label": "Chimera Rx (web)", "onAutoForward": "openBrowser" },
+    "4000": { "label": "Chimera Rx (API)" }
+  },
+  "containerEnv": { "LLM_PROVIDER": "none", "LG_DEMO": "1" }
+}

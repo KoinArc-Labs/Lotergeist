@@ -1,28 +1,30 @@
-# Product: Body Snatcher Rx
+---
+inclusion: always
+---
+# Product: Chimera Rx
 
-Body Snatcher Rx turns a vague FDA drug recall into an exact list of affected patients, shelf bottles and a pickup route in under 60 seconds. Kiroween 2026 entry, Frankenstein category, with a Costume Contest standard UI.
+Chimera Rx is a pharmacy lot ledger. It captures the lot and serial of every package at receiving, put-away and fill, so that when the FDA recalls a lot the pharmacy can find the exact units on its shelf and the exact patients who took one home, then reach them. Kiroween 2026 entry, **Frankenstein** category.
 
 ## The gap
-The pharmacy knows who received a drug but not which lot each patient received. The lot number is lost between the supply chain (tracks lots) and the dispensing system (tracks patients). Pharmacies either warn everyone or no one.
+Wholesalers track lots. Dispensing systems track patients. Nobody records which lot each patient received, so a recall means warning everyone or no one. The lot is printed in the GS1 DataMatrix on every package; Chimera Rx captures it at the counter.
+
+## The Frankenstein parts
+GS1 DataMatrix via webcam or USB scanner · browser OCR of faxes and labels · openFDA · regex + LLM lot extraction with a verbatim gate · deterministic Rx rules · NCPDP SCRIPT change requests (sandbox) · REST, MCP and FHIR R4 partner surfaces behind OAuth · signed webhooks · text-to-speech voicemail · a hash-chained audit log. Every new feature should make one of these parts talk to another, not add a silo.
 
 ## Users
-| User | Job | Sees |
+| Role | Job | Sees |
 | --- | --- | --- |
-| Pharmacist in charge | Respond to a recall fast and precisely | Affected patients, bottles to quarantine, approved outreach |
-| Pharmacy technician | Pull stock from the shelf | Scan-to-verify page: cursed or clean |
-| Distributor returns coordinator | Collect recalled stock | Pickup route with cold-chain weather warnings |
-| Judge | Understand it in 3 minutes | One story: notice, hunt, scan, hearse |
+| Pharmacist | Verify fills, decide flagged orders, run recalls | Everything except integrations admin |
+| Technician | Receive, shelve, fill | Receiving, inventory, fill; no recall actions |
+| Cashier | Hand over and sell | Pickup only; no allergies or date of birth |
+| Admin | Partner access | Integrations only |
+| Judge | Understand it in 3 minutes | Notice → quarantine → patients → messages |
 
-## The six-stage hunt
-1. Summoner: openFDA enforcement notice (poll or paste)
-2. Coroner: regex + LLM lift NDC, lots and expiry with confidence
-3. Tracker: GS1 EPCIS 2.0 chain of custody in DuckDB
-4. Grave Robber: Playwright bot reads RxTerm 98 (1998 terminal) and a fax inbox
-5. Undertaker: quarantine bins, patient letters (pharmacist approves), shortage omen
-6. Hearse: pickup route with NWS weather and cold-chain checks
+## Screens
+Sign in, Today, Receiving, Inventory, Fill & pickup, Patients, Recalls, Integrations, plus demo tools (Test labels, Sandbox outbox). The design source of truth is `prototype/*.dc.html`; match it.
 
 ## Non-goals
-No real patient data, no HIPAA claims, no real pharmacy/wholesaler/payer portals, no message is ever sent, no DCLI code or accounts, no native app, no user accounts beyond judge demo mode.
+No real patient data, no real messaging or calls, no real pharmacy, wholesaler, payer or Surescripts connections, no compliance claims, no native app. This is a competition entry, not a product for sale.
 
-## Cut list (cut from the top when behind)
-S5 replay timeline, S4 voice narrator, S2 NADAC card, S3 rxterm-mcp, fax OCR, S1 Night Watch Crew bot, weather check. Never cut: extraction with PBT, trace, RPA on RxTerm 98, Body Trail, Scan, judge mode.
+## Never cut
+Lot capture at receiving and fill, recall lookup → impact → notify, the verbatim lot gate and its property tests, the camera scan, roles and audit.

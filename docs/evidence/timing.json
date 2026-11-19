@@ -1,0 +1,60 @@
+{
+  "generated": "2026-11-19T17:59:36.560Z",
+  "recall": "D-0650-2026",
+  "runs": [
+    {
+      "ms": 17.080584000000044,
+      "patients": 166,
+      "units": 15,
+      "confirmClicks": 0
+    },
+    {
+      "ms": 10.65295900000001,
+      "patients": 166,
+      "units": 15,
+      "confirmClicks": 0
+    },
+    {
+      "ms": 10.210957999999891,
+      "patients": 166,
+      "units": 15,
+      "confirmClicks": 0
+    },
+    {
+      "ms": 9.941249999999854,
+      "patients": 166,
+      "units": 15,
+      "confirmClicks": 0
+    },
+    {
+      "ms": 9.735709000000043,
+      "patients": 166,
+      "units": 15,
+      "confirmClicks": 0
+    }
+  ],
+  "medianMs": 10.2,
+  "worstMs": 17.1,
+  "underSixtySeconds": true,
+  "lotCapture": {
+    "total": 5345,
+    "captured": 5129,
+    "rate": 0.9595884003741815
+  },
+  "dataset": {
+    "seed": 20261204,
+    "products": 140,
+    "lots": 177,
+    "patients": 500,
+    "fills": 5000,
+    "legacyFills": 216,
+    "packages": 5730
+  },
+  "machine": {
+    "cpu": "Apple M5 Pro",
+    "cores": 15,
+    "memoryGb": 24,
+    "os": "Darwin 27.2.0 arm64",
+    "node": "v26.4.0"
+  }
+}

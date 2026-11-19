@@ -1,4 +1,4 @@
-import { parseNdc } from "@bsrx/gs1";
+import { parseNdc } from "@chimera-rx/gs1";
 import { dateAt } from "./dates";
 import type { ExtractedLot, ExtractedNdc } from "./types";
 

@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+data
+dist
+**/dist
+.git
+aidlc
+.kiro
+.claude
+*.log
+.env
+test-results
+playwright-report

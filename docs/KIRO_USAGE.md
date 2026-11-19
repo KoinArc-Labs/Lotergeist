@@ -1,59 +1,76 @@
 # How Kiro was used
 
-An honest account. Kiro (the agent) wrote this repo from the intent/spec document and the uploaded four-screen design, working through the six specs in `.kiro/specs/`. Things that were not measured or not run are marked.
+An honest account. Kiro (the agent, in Kiro IDE) wrote most of this repo from a written spec and uploaded HTML mockups, with a person directing each step. Anything that was not measured or not run is marked.
 
-## 1. Specs shaped the organs
-Each spec has `requirements.md` (the EARS IDs from the plan), `design.md` and `tasks.md`. IDs travel into tests (`COR-3`, `TRK-3` ...) and `describe` blocks.
+## The arc
 
-**One contradiction the requirements pass surfaced:** COR-4 (a human confirms any field under 0.80) versus a fully automatic Night Watch bot. Resolution recorded in `.kiro/specs/coroner/requirements.md`: Night Watch auto-confirms only when `needsReview` is false and `NIGHT_WATCH_AUTORUN=1`, enforced in `confirmRecall()` (HTTP 403 otherwise).
+1. **First idea: Body Snatcher Rx.** A recall hunter that read a 1998 pharmacy terminal with a Playwright bot. Kiro built it from six specs. It worked, but the pharmacist had to trust lot numbers inferred after the fact.
+2. **Pivot: Chimera Rx.** The better fix is to capture the lot when it is in your hand: at receiving and at fill. A new product spec and six mockups arrived; Kiro built the API and web app beside the old code, then rebuilt the screens from the mockup markup when the first pass only matched the colours.
+3. **Platform.** Rx Watcher, the prescriber change loop, Patients, voicemail outreach and the partner API (REST, MCP, FHIR) were added against `docs/plan.md`.
+4. **Cleanup.** The Body Snatcher apps and packages were removed. Three of its packages survive because Chimera Rx uses them: `gs1`, `summoner`, `coroner`.
 
-**One design/spec mismatch:** the plan lists six UI screens; the uploaded design has four. The Morgue (drawers, candles, letters) became "The afterlife" on screen IV. Recorded in `costume-ui/requirements.md`.
+## Specs
 
-## 2. Property-based tests
-`fast-check` properties live next to the code: GS1 check digits and NDC round-trips, element-string round-trips with FNC1, COR-2/COR-3 on noisy text with a lying LLM, TRK-3 over random synthetic worlds, rate-limit window, grade-6 letters without cross-patient IDs, route order and depot-to-depot.
+`.kiro/specs/coroner` and `.kiro/specs/summoner` hold `requirements.md` (EARS), `design.md` and `tasks.md`. Requirement IDs travel into tests (`COR-3`, `SUM-3`). The specs for the earlier Body Snatcher modules were deleted with that code.
 
-### The counterexample PBT found
-The TRK-3 property generates small synthetic worlds. It failed immediately:
+**Gap, stated plainly:** the Chimera Rx modules (receiving, inventory, fill, recall impact, outreach, partner API, Rx Watcher) were built from `docs/plan.md` and the mockups, not from per-module Kiro specs. `docs/plan.md` §15 lists the specs that should exist; they have not been written.
 
-```
-Counterexample: [1]            (seed = 1, fillerSerialsPerLot = 30)
-Caused by: Error: out of stock for FL015401 at 0614141000227
-```
+## Steering
 
-The world generator gave each of 8 pharmacies a random share of a 30-package lot, then generated up to 9 dispenses per pharmacy. A pharmacy holding 2 packages could "dispense" 9. The default 2,150-package lots hid it. Fix: cap fills at half of a pharmacy's stock (`packages/crypt-seed/src/world.ts`). Not a Coroner bug, but a real generator bug that only PBT could reach.
+`.kiro/steering/`: `product.md`, `tech.md` and `pharmacy-safety.md` load on every request; `gs1-standards.md` loads for `packages/gs1`; `coroner-prompt.md` is manual and the API reads its fenced prompt at runtime. The safety rules were followed during the build: for example, the first test run caught seed emails on `mail.example`, and they were moved to `example.com`; the SignIn mockup's "Access is logged for HIPAA audit" line was changed because rule 11 forbids compliance claims. **No before/after comparison of output quality was run.**
 
-The plan suggested a lot like `B-2041/A` broken by the slash as the likely counterexample. A unit test for slash lots passes; **PBT did not find a slash bug**, so none is claimed.
+## Hooks
 
-### Bugs the 50 real openFDA records found (not PBT)
-Running the regex pass over `fixtures/recalls/real-2025.json` found three real defects that the hand-written generators missed. Regression tests for each are in `packages/coroner/test/coroner.test.ts`.
-1. `Mar-25` style expiries were emitted as lots (and `500-Count` too).
-2. The plural keyword `Lots:` was not recognised, so a whole notice returned zero lots.
-3. Lot lists that continue after a `;` were cut off, a silent false negative (the dangerous kind).
+`.kiro/hooks/`:
+- `pbt-on-save`: runs the Coroner and GS1 property tests when their files are saved.
+- `phi-guard`: PreToolUse on shell commands; blocks `git commit` when staged files look like PHI. Also a git pre-commit hook and a CI step.
+- `usage-log`: PostTaskExec; appends finished spec tasks to the log below.
 
-### Soul Catcher (updated spec)
-Specs: `.kiro/specs/soul-catcher/`. Found while building it:
-- **The real recall hid its NDC.** Real recall D-0526-2026 keeps the NDC in `product_description` and only the lot in `code_info`. The Coroner was reading `code_info` alone, so it extracted a lot but no NDC. COR-1 says both fields; the pipeline now reads both. A test covers it.
-- **A wrong-hyphen bug in my own code.** The first version of the soul card showed `07000-4417-05` for a methylprednisolone package: 10 NDC digits do not say where the hyphens go and I took the first layout (4-4-2) instead of the one matching the prescription. The end-to-end test now asserts `70004-0417-05` and that the WRONG VESSEL message names `70004-417-05`.
-- **The Playwright timeout.** The RPA-9 test (an unknown prescription) hung for 60 s because Playwright waits 30 s per click. The write-back bot now uses a 5 s action timeout and fails fast.
-- **Camera rehearsal without a camera.** `packages/grave-robber/scripts/soul-catcher-e2e.mjs` replaces `getUserMedia` with a canvas stream that "holds up" each generated label. All six printed labels decoded through the real crop, zxing, 2-frame and API path with the right verdict. This is **not** a test of a physical webcam, lighting or print quality.
+No time-saved numbers exist.
 
-## 3. Hooks
-`.kiro/hooks/*.json`: `pbt-on-save` (Coroner and GS1 tests on save), `rpa-selectors` (agent hook: re-check `selectors.json` when RxTerm 98 changes), `phi-guard` (PreToolUse on shell commands: blocks `git commit` when staged files look like PHI; the script is also a git pre-commit hook and runs in CI), `usage-log` (PostTaskExec: appends below).
-Kiro hooks load at the next session start, so none of them had fired while this repo was being built. **No time-saved numbers exist.** `scripts/phi-guard.sh` was exercised by hand: clean on the repo, exit 2 on a planted SSN.
+## Agents
 
-## 4. MCP
-- `dead-registry-mcp` (ours, `packages/dead-registry-mcp`): `summon_recall`, `autopsy`, `trace_lot`, `who_holds`, `plan_hearse`; stdio and `--http`. The stdio server was smoke-tested with the MCP SDK client against a running API; the `--http` mode was not exercised. Configured in `.kiro/settings/mcp.json`.
-- Playwright MCP and the AWS docs MCP are listed in `mcp.json` but disabled. They were not used while building.
-- `rxterm-mcp` (stretch S3) was not built.
+`.kiro/agents/coroner.json` scopes a custom agent to `packages/coroner` and `packages/gs1`, loads the GS1 and safety steering, and requires property tests before it finishes.
 
-## 5. Custom agents and steering
-Three agents (`coroner`, `grave-robber`, `costume-designer`) scope their folders and load the steering they need. Steering: `product`, `tech`, `pharmacy-safety` (always on), `gs1-standards` and `costume` (file-match), `coroner-prompt` (manual; the API reads the fenced prompt from it at runtime). **No before/after output-quality comparison was run.**
+## MCP
 
-## 6. What did not work, and what changed
-- `pdf-parse@1.1.4` throws `bad XRef entry` on the first parse in a fresh process (passed under Vitest, failed under the API). Added a retry wrapper in `packages/grave-robber/src/fax.ts`.
-- The demo reset first loaded all 53 fixture recalls as "demo": real 2025 recall numbers also start with `D-`. Demo recalls are now identified by `(synthetic)` in the firm name.
-- The design shows one terminal with "5 of 14" rows. With per-pharmacy terminals the counts are per store (7 at Riverside, 4, 2, 1, plus 3 by fax). Numbers on screen come from data, not from the mock.
-- Dispense rows carry no serial. Serial numbers on the Body Trail are inferred FIFO and labelled. A real deployment would need pharmacy-side scanning at dispense.
+No MCP server was used to build this repo. Chimera Rx *exposes* an MCP endpoint (`POST /mcp`, JSON-RPC, tools filtered by OAuth scope) for partner AI agents; it is tested in `apps/api/test/platform.test.ts`.
+
+## Property-based tests (fast-check)
+
+- GS1 check digits, NDC ↔ GTIN round trips, element strings with FNC1.
+- Coroner: lots are never invented, even when a fake LLM lies (COR-3).
+- Ledger: under random sequences of receive, fill, send back, adjust and recall, on hand always equals received − dispensed − returned − adjusted, no serial is dispensed twice, and every dispensed serial was received.
+- Rx Watcher rules.
+
+## Bugs the tests found
+
+- **Ledger property, first run:** about 1 in 97 seeded historical fills had no package, which broke the reconciliation invariant. The seed quirk was removed.
+- **OCR NDC parsing:** `70OO4-226-O1` (O for 0) was not repaired because the hyphens were mangled before the letter fix. Now each segment is fixed separately.
+- **Put-away locations:** `Bin -9` appeared because a signed bit shift went negative on large hashes. Fixed with unsigned shifts.
+- **Real openFDA records** (50 from 2025) found three Coroner defects that hand-written generators missed: `Mar-25` expiries read as lots, plural `Lots:` not recognised, and lot lists cut off after `;`.
+
+## Rehearsal without a camera
+
+`scripts/e2e/demo-e2e.mjs` swaps `getUserMedia` for a canvas that holds up generated DataMatrix labels and a printed text label, then drives the real UI: scan, put-away, a bad serial reported as a problem, label OCR, a fill, and the fax-OCR recall through to messages sent. 13 of 13 checks passed on the last run. **This is not a test of a physical webcam, lighting or print quality.**
+
+## AI-DLC record
+
+The judge-ready pilot was planned with AI-DLC (the `aidlc/` folder and `.kiro/aidlc-common`, `.kiro/skills/aidlc`). Its record for this intent, `aidlc/spaces/default/intents/261116-judge-ready-pilot/`, holds the intent statement, feasibility, scope, rough mockups, the reverse-engineering code knowledge base (`aidlc/spaces/default/codekb/Kiroween/`), practices, requirements and user stories.
+
+**Gap, stated plainly:** the run reached User Stories. The stories, the traceability file and the Must-priority build (scenarios, the generated dataset, the evidence scripts, Docker, Codespaces config) were written in one session from those requirements, outside the AI-DLC approval gates, because this tool could not record gate approvals. The later AI-DLC stages (domain design, units, contracts, delivery planning, functional and NFR design, code generation records, build and test, CI) were not run. The register, second sign-in factor and stock help were added afterwards (`register.ts`, `mfa.ts`, `stockhelp.ts`, tests in `apps/api/test/pilot-platform.test.ts`), also outside the gates. Two stores (FR4) followed (`stores.ts`, `crossstore.ts`, `seed-store2.ts`, `apps/api/test/two-stores.test.ts`).
 
 ## Not done
-Lot inference for past fills (INF-1 to INF-6); testing the Soul Catcher with a physical webcam, printed labels and a real carton; Night Watch as a separate Kiro Crew repo (S1), voice narrator (S4), replay timeline (S5), fax OCR, a live OSRM run, a live LLM run, deployment to AWS, video, blog and social posts.
+
+
+- Per-module Kiro specs for the Chimera Rx modules.
+- A live LLM run (the LLM paths were exercised with test doubles only).
+- A physical webcam test.
+- Hosting (judges run it locally with Docker), the submission video, and a run of the Docker build on a machine with a working Docker daemon.
+
+## Usage log
+
+Appended by the `usage-log` hook after each completed spec task.
+
+| Time (UTC) | Task | Files changed |
+| --- | --- | --- |

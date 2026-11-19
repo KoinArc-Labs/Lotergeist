@@ -1,9 +1,9 @@
-# Lotergeist — Full Solution Plan
+# Chimera Rx — Full Solution Plan
 
 > Pharmacy operations platform that tracks every package by lot and serial from the delivery dock to the patient, catches prescription problems with an AI checker, and turns a recall into a list of affected stock and patients in minutes.
 >
 > Version 1.0 · Nov 2026 · Author: Pritesh Borad
-> Status: hackathon build (Kiroween 2026, Costume Contest) → pilot-ready architecture.
+> Status: hackathon build (Kiroween 2026, Frankenstein) → pilot-ready architecture.
 > **Synthetic data only until a pilot signs a BAA.** Nothing here is legal or regulatory advice; verify with counsel and a practicing pharmacist.
 
 ---
@@ -343,7 +343,7 @@ HIPAA risk assessment → SOC 2 Type I (pilot) → SOC 2 Type II (12 months) →
 
 ## 11. Compliance map
 
-| Area | Requirement | How Lotergeist supports it |
+| Area | Requirement | How Chimera Rx supports it |
 |------|-------------|----------------------------|
 | DSCSA | Trade with authorized partners; keep TI/TS 6 years; quarantine and investigate suspect product; package-level tracing (small dispensers exempt until Nov 27, 2027 per FDA) | TI/TS stored at receiving; serial-level ledger; quarantine workflow; EPCIS-ready events |
 | HIPAA | Privacy, Security and Breach rules; BAAs; minimum necessary | Section 10; BAAs with every vendor touching PHI; access logging |
@@ -366,7 +366,7 @@ HIPAA risk assessment → SOC 2 Type I (pilot) → SOC 2 Type II (12 months) →
 - IaC: AWS CDK. CI/CD: GitHub Actions.
 
 ```
-lotergeist/
+chimera-rx/
 ├─ .kiro/                     # specs, steering, hooks (see section 15)
 ├─ apps/
 │  ├─ web/                    # React app (screens from this prototype)
@@ -429,7 +429,7 @@ lotergeist/
 - Pre-commit → PHI-pattern scanner; fail if `.kiro/` is git-ignored.
 - On agent prompt change → run the evaluation suite.
 
-**MCP:** openFDA MCP server; project `lotergeist-mcp` exposing ledger and recall queries for development.
+**MCP:** openFDA MCP server; project `chimera-rx-mcp` exposing ledger and recall queries for development.
 
 ---
 
@@ -448,7 +448,7 @@ lotergeist/
 
 | Risk | Mitigation |
 |------|-----------|
-| Pharmacies won't scan twice (PMS + Lotergeist) | Integrate with PMS scan step; or capture lot in the PMS and sync |
+| Pharmacies won't scan twice (PMS + Chimera Rx) | Integrate with PMS scan step; or capture lot in the PMS and sync |
 | PMS vendors add lot-to-patient themselves | Partner with them; sell recall outreach as a service |
 | AI gives a wrong clinical finding | Rules first, LLM explains only; pharmacist decides; evaluation gate |
 | TCPA exposure on automated calls | Counsel review, consent records, calling windows, opt-outs |

@@ -2,20 +2,39 @@
   "mcpServers": {
     "dead-registry": {
       "command": "pnpm",
-      "args": ["--silent", "--filter", "@bsrx/dead-registry-mcp", "run", "start"],
-      "env": { "API_URL": "http://localhost:4000" },
-      "disabled": false,
-      "autoApprove": ["autopsy", "trace_lot", "who_holds", "plan_hearse"]
+      "args": [
+        "--silent",
+        "--filter",
+        "@chimera-rx/dead-registry-mcp",
+        "run",
+        "start"
+      ],
+      "env": {
+        "API_URL": "http://localhost:4000"
+      },
+      "disabled": true,
+      "autoApprove": [
+        "autopsy",
+        "trace_lot",
+        "who_holds",
+        "plan_hearse"
+      ]
     },
     "playwright": {
       "command": "npx",
-      "args": ["@playwright/mcp@latest"],
+      "args": [
+        "@playwright/mcp@latest"
+      ],
       "disabled": true
     },
     "aws-docs": {
       "command": "uvx",
-      "args": ["awslabs.aws-documentation-mcp-server@latest"],
-      "env": { "FASTMCP_LOG_LEVEL": "ERROR" },
+      "args": [
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
       "disabled": true
     }
   }
