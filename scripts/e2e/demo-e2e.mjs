@@ -49,13 +49,25 @@ const FAKE_CAM = () => {
   navigator.mediaDevices.getUserMedia = async () => stream;
 };
 
+/** Password step, then the sandbox code when the API runs with MFA=1. */
+async function apiLogin(ctx, who, storeId = "store-7", domain = "elmstreetrx.example") {
+  const r = await ctx.request.post(`${BASE}/api/auth/login`, { data: { storeId, email: `${who}@${domain}`, password: PW, trusted: true } });
+  if (!r.ok()) throw new Error("login failed " + r.status());
+  const j = await r.json();
+  if (j.mfaRequired) {
+    const c = await (await ctx.request.get(`${BASE}/api/auth/demo-code/${j.challenge}`)).json();
+    const v = await ctx.request.post(`${BASE}/api/auth/verify`, { data: { challenge: j.challenge, code: c.code } });
+    if (!v.ok()) throw new Error("mfa verify failed " + v.status());
+  }
+  return j;
+}
+
 async function session(who) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await ctx.addInitScript(FAKE_CAM);
   const page = await ctx.newPage();
   page.on("pageerror", (e) => console.log("  pageerror:", e.message));
-  const r = await ctx.request.post(`${BASE}/api/auth/login`, { data: { storeId: "store-7", email: `${who}@elmstreetrx.example`, password: PW, trusted: true } });
-  if (!r.ok()) throw new Error("login failed " + r.status());
+  await apiLogin(ctx, who);
   return { ctx, page };
 }
 
@@ -63,7 +75,7 @@ try {
   // reset
   const pharm = await session("j.rivera");
   await pharm.ctx.request.post(`${BASE}/api/demo/reset`, { data: {} });
-  await pharm.ctx.request.post(`${BASE}/api/auth/login`, { data: { storeId: "store-7", email: "j.rivera@elmstreetrx.example", password: PW, trusted: true } }); // reset clears sessions
+  await apiLogin(pharm.ctx, "j.rivera"); // reset clears sessions
   const labels = (await (await pharm.ctx.request.get(`${BASE}/api/demo/labels`)).json()).labels;
   const find = (lot, serial) => labels.find((l) => l.lot === lot && (!serial || l.serial === serial));
 
@@ -76,7 +88,7 @@ try {
   await p.getByRole("button", { name: "Stop camera" }).waitFor();
   const amox = find("AMX0926B", "10443850");
   await p.evaluate((u) => window.__hold(u), `data:image/png;base64,${await png(gs1(amox))}`);
-  await p.waitForSelector("text=Transaction information verified", { timeout: 15000 });
+  await p.waitForSelector("text=Transaction information verified", { timeout: 15000 }).catch(async (e) => { await p.screenshot({ path: path.join(SHOTS, "fail-receive.png") }); console.log((await p.locator("main").innerText()).slice(0, 600)); throw e; });
   check("camera reads a DataMatrix and the four checks run", true);
   const where = await p.locator("text=/Aisle \\d · Bay/").first().innerText();
   check("put-away location suggested", /Aisle 2 · Bay [ABC] · Shelf \d · Bin \d+/.test(where), where);
@@ -196,6 +208,125 @@ try {
   await p.goto(`${BASE}/#/inventory?filter=recall`);
   await p.waitForSelector("text=Recalled · held");
   check("recalled lots show in inventory", (await p.locator("tbody tr").count()) >= 2);
+
+  // 9. AI AGENTS under the mock provider: Coroner and Outreach Drafter -------------------------
+  p = pharm.page;
+  await p.goto(`${BASE}/#/agents`);
+  await p.waitForSelector("text=AI agents");
+  const card = (name) => p.locator(`article[aria-label="${name}"]`);
+  const runAgent = async (name) => {
+    await card(name).getByRole("button", { name: "Run with sample input" }).click();
+    await p.waitForSelector("text=/Recent runs/");
+    await p.waitForTimeout(1500);
+  };
+  const agentNames = await p.locator("article h2").allInnerTexts();
+  check("AI Agents lists the agents", agentNames.length >= 3, agentNames.join(", "));
+  const coroner = agentNames.find((n) => /coroner/i.test(n));
+  const drafter = agentNames.find((n) => /outreach/i.test(n));
+  check("Coroner and Outreach Drafter are present", !!coroner && !!drafter);
+  if (coroner) {
+    await runAgent(coroner);
+    const t = await p.locator("main").innerText();
+    check("Coroner run shows a result and an advisory label", /lot|PRORX/i.test(t) && /advisory/i.test(t));
+  }
+  if (drafter) {
+    await runAgent(drafter);
+    const t = await p.locator("main").innerText();
+    check("Outreach Drafter run produces a draft", /draft|message|text/i.test(t));
+  }
+  check("runs are listed under Recent runs", (await p.locator("section[aria-label='Recent runs'] button").count()) >= 1);
+  await p.screenshot({ path: path.join(SHOTS, "agents.png"), fullPage: true });
+  await p.getByRole("button", { name: "Test connection" }).click();
+  await p.waitForTimeout(1500);
+  check("Test connection answers without an error page", !(await p.locator("main").innerText()).includes("Something went wrong"));
+
+  // 10. REFILLS: recall-blocked row after the recall ----------------------------------------------
+  await pharm.ctx.request.post(`${BASE}/api/demo/scenarios/recall-aware-refill`, { data: {} });
+  await apiLogin(pharm.ctx, "j.rivera"); // a scenario resets the demo and clears sessions
+  const lk = await pharm.ctx.request.post(`${BASE}/api/recalls/lookup`, { data: { number: "D-0611-2026" } }); // insulin lot GX4471C, auto-confirmed
+  if (!lk.ok()) throw new Error("recall lookup failed " + lk.status());
+  await p.goto(`${BASE}/#/refills`);
+  await p.waitForSelector("text=Blocked by a recall");
+  await p.waitForSelector("text=Recall hold", { timeout: 8000 }).then(() => check("Refills shows a row on recall hold", true), () => check("Refills shows a row on recall hold", false));
+  await p.screenshot({ path: path.join(SHOTS, "refills.png"), fullPage: true });
+
+  // 11. DSCSA & TRACE: export, verify -------------------------------------------------------------
+  await p.goto(`${BASE}/#/dscsa`);
+  await p.waitForSelector("text=Verification requests");
+  const [dl] = await Promise.all([p.waitForEvent("download", { timeout: 15000 }), p.getByRole("link", { name: "Download .jsonld" }).click()]);
+  const exp = fs.readFileSync(await dl.path(), "utf8");
+  check("DSCSA export downloads EPCIS JSON-LD", exp.includes("epcis") || exp.includes("EPCIS"), `${exp.length} bytes`);
+  await p.getByRole("button", { name: "Preview" }).click();
+  await p.getByRole("button", { name: "Ask the sandbox verifier" }).click();
+  await p.waitForTimeout(1500);
+  check("sandbox verifier writes a row to the request log", !(await p.locator("main").innerText()).includes("No requests yet."));
+  await p.screenshot({ path: path.join(SHOTS, "dscsa.png"), fullPage: true });
+
+  // 12. REGISTER: cashier sells an over-the-counter item; cashier role leaks ---------------------
+  const cash = await session("m.diaz");
+  p = cash.page;
+  await p.goto(`${BASE}/#/register`);
+  await p.waitForSelector("text=Mark paid and print receipt");
+  await p.locator("#rq").fill("a");
+  await p.waitForTimeout(1200);
+  const addBtn = p.locator("section[aria-labelledby='otc'] ul button, section[aria-labelledby='otc'] li button").first();
+  await addBtn.click();
+  await p.getByRole("button", { name: "Mark paid and print receipt" }).click();
+  await p.waitForSelector("section[aria-label='Receipt']", { timeout: 8000 }).then(() => check("register sale completes with a receipt", true), () => check("register sale completes with a receipt", false));
+  await p.screenshot({ path: path.join(SHOTS, "register.png"), fullPage: true });
+  const navText = await p.locator("nav[aria-label='Main']").innerText();
+  check("cashier nav hides Patients, Recalls actions of staff, Integrations, AI agents", !/Patients|Integrations|AI agents/.test(navText));
+  await p.goto(`${BASE}/#/patients`);
+  await p.waitForSelector("text=Not available for your role", { timeout: 5000 }).then(() => check("cashier opening /patients sees a role message, not patient data", true), () => check("cashier opening /patients sees a role message, not patient data", false));
+  const api403 = [];
+  for (const u of ["/api/patients/search?q=Daniel", "/api/patients/S-0612"]) api403.push((await cash.ctx.request.get(`${BASE}${u}`)).status());
+  check("cashier API calls for patient records are refused (403)", api403.every((c) => c === 403), api403.join(","));
+  const body403 = await (await cash.ctx.request.get(`${BASE}/api/rx`)).text();
+  check("cashier fill list carries no DOB or allergies", !/dob|allerg/i.test(body403));
+  await cash.ctx.close();
+
+  // 13. TRANSFER between the two stores ---------------------------------------------------------------
+  p = pharm.page;
+  await p.goto(`${BASE}/#/transfers`);
+  await p.waitForSelector("#lot");
+  const opt = await p.locator("#lot option").nth(1).getAttribute("value");
+  await p.selectOption("#lot", opt);
+  await p.getByRole("button", { name: "Move stock" }).click();
+  await p.waitForSelector("text=Recorded in both audit logs", { timeout: 8000 }).then(() => check("two-store transfer is recorded in both audit logs", true), () => check("two-store transfer is recorded in both audit logs", false));
+  await p.screenshot({ path: path.join(SHOTS, "transfers.png") });
+
+  // 14. MFA sign-in through the real form (only when the API runs with MFA=1) -------------------------
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const probe = await ctx.request.post(`${BASE}/api/auth/login`, { data: { storeId: "store-7", email: "k.patel@elmstreetrx.example", password: PW } });
+    const pj = await probe.json();
+    if (pj.mfaRequired) {
+      const page = await ctx.newPage();
+      await page.goto(`${BASE}/#/`);
+      await page.waitForSelector("form");
+      await page.locator("input[type=email], #email").first().fill("k.patel@elmstreetrx.example");
+      await page.locator("input[type=password], #password").first().fill(PW);
+      await page.getByRole("button", { name: /^Sign in/ }).first().click();
+      await page.waitForSelector("text=Enter your code", { timeout: 8000 }).catch(async (e) => { await page.screenshot({ path: path.join(SHOTS, "fail-mfa.png") }); throw e; });
+      await page.locator("#code").fill("000000");
+      await page.getByRole("button", { name: "Verify and sign in" }).click();
+      await page.waitForSelector("text=/not right|expired/", { timeout: 8000 }).then(() => check("MFA: a wrong code is refused", true), () => check("MFA: a wrong code is refused", false));
+      const hint = page.getByRole("link", { name: /Show the code/ });
+      if (await hint.count()) {
+        await hint.click();
+        await page.locator("[role=status]").first().waitFor();
+        const code = (await page.locator("[role=status]").first().innerText()).match(/\d{6}/)?.[0];
+        await page.locator("#code").fill(code ?? "");
+        await page.getByRole("button", { name: "Verify and sign in" }).click();
+      } else {
+        await page.goto(`${BASE}/#/`);
+      }
+      await page.waitForSelector("nav[aria-label='Main']", { timeout: 8000 }).then(() => check("MFA: the sandbox code signs the user in", true), () => check("MFA: the sandbox code signs the user in", false));
+    } else {
+      console.log("SKIP  MFA sign-in (API is running without MFA=1)");
+    }
+    await ctx.close();
+  }
 } catch (e) {
   console.log("ERROR", e);
   results.push({ name: "script", ok: false });
