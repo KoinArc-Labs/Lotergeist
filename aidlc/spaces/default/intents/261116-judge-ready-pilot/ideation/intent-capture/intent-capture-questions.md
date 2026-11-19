@@ -42,7 +42,7 @@ D. A judge can try it in under 5 minutes, hosted or with one command
 E. Not yet defined
 X. Other (please specify)
 
-[Answer]: A, B, C, D (left to the agent: "you decide")
+[Answer]: A, C, D
 
 ## Q4. [Product] Which judging criterion needs the most work
 
@@ -143,3 +143,49 @@ E. None beyond what is already built
 X. Other (please specify)
 
 [Answer]: A, B, C, D
+
+## Q12. [Product] Fitting the scope into the time left (follow-up to Q8 and Q10)
+
+Two answers pull against the deadline. In Q10 you added front-store retail (the register and over-the-counter shopping), which is not built yet. In Q8 you kept production hardening (second factor, several stores, row-level security) inside this first version. Both are large, and there are about three weeks to December 4 with the Kiro evidence, video and hosted demo still to do. Which way should this go?
+
+A. Keep both, and cut depth elsewhere (fewer screens polished, smaller dataset)
+B. Build a thin front-store register (sell over-the-counter items and prescriptions at one counter); leave production hardening out
+C. Build production hardening; show front-store retail only as a planned next step
+D. Leave both out of this version and name them as the roadmap in the pitch
+E. Not yet defined
+X. Other (please specify)
+
+[Answer]: A. Keep both, and cut depth elsewhere (fewer screens polished, smaller dataset)
+
+## Consolidated Summary Confirmation
+
+- Problem: modernise retail pharmacy software into one place that fills market gaps, with AI helping people decide (Q1)
+- Persona: Pritesh presents; the story follows a pharmacy team (pharmacist, technician, cashier) through one day (Q2, Q9)
+- Success: recall notice to patient list in under 60 seconds; published lot-extraction accuracy on real openFDA records; a judge can try it in under 5 minutes (Q3)
+- Effort spread evenly across Potential Value, Implementation and Quality and Design (Q4)
+- Why now: the December 4, 2026 Kiroween deadline and real recalls that show the lot-to-patient gap (Q5)
+- Pritesh decides alone; the judges evaluate the result; no reporting beyond the approval steps (Q6, Q7)
+- Out of this version: real patient data, real SMS, email or calls, and real pharmacy, wholesaler, EHR or e-prescribing connections (Q8)
+- In this version: receiving and DSCSA traceability by lot, fill with lot capture, recall to patient outreach, AI decision help, front-store retail, and production hardening (second factor, several stores, row-level security) (Q8, Q10)
+- AI helps with recall reading, prescription checks, stock (reorder, expiry, shortage) and patient outreach; the pharmacist decides (Q11)
+- Front-store retail and production hardening both stay in; depth is cut elsewhere (fewer screens polished, smaller dataset) (Q12)
+
+Does this all look correct before I generate the artifact?
+
+- Looks correct
+- Request changes
+
+[Answer]: Looks correct
+
+## Assumption Confirmation
+
+These are written into the intent statement and stakeholder map as assumptions, not facts:
+
+- The federal DSCSA electronic traceability deadline for small dispensers is November 27, 2026, one week before Kiroween, and can be used in the pitch as a second reason why now.
+- No numeric target is set for lot-extraction accuracy until it has been measured.
+- No other person influences scope or priority.
+
+A. Accept assumptions
+B. Convert to follow-up questions
+
+[Answer]: A. Accept assumptions
