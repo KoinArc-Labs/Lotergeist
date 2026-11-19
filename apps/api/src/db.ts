@@ -197,6 +197,20 @@ export class Db {
       CREATE TABLE IF NOT EXISTS sale_lines (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id INTEGER, kind TEXT, upc TEXT, dispense_id INTEGER, name TEXT, qty INTEGER, price_cents INTEGER, rx TEXT, lot TEXT, serial TEXT);
       CREATE TABLE IF NOT EXISTS stock_decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, item_key TEXT, decision TEXT, by TEXT, at INTEGER, UNIQUE(kind, item_key));
       CREATE TABLE IF NOT EXISTS audio (id TEXT PRIMARY KEY, mime TEXT, bytes BLOB, voice TEXT, text TEXT, at INTEGER);
+
+      -- DSCSA and EPCIS trace (epcis.ts): sandbox verification log, suspect-product cases, advisory imported trace events
+      CREATE TABLE IF NOT EXISTS verification_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, by_name TEXT, gtin TEXT, serial TEXT, lot TEXT, expiry TEXT, result TEXT, reason TEXT,
+        response_json TEXT, package_id INTEGER, delivery_id TEXT
+      );
+      CREATE TABLE IF NOT EXISTS suspect_cases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, opened_at INTEGER, opened_by TEXT, source TEXT, verification_id INTEGER, recall_id TEXT, gtin TEXT, lot TEXT,
+        serial TEXT, package_id INTEGER, status TEXT, note TEXT, closed_at INTEGER, closed_by TEXT, close_note TEXT
+      );
+      CREATE TABLE IF NOT EXISTS trace_imports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, by_name TEXT, event_id TEXT UNIQUE, kind TEXT, gtin TEXT, lot TEXT, serial TEXT, expiry TEXT,
+        event_at INTEGER, source_label TEXT, event_json TEXT
+      );
     `);
     const addColumn = (table: string, col: string, def: string) => {
       const have = (this.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === col);

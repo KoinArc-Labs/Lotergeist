@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@chimera-rx/coroner": "workspace:*",
+    "@chimera-rx/epcis": "workspace:*",
     "@chimera-rx/gs1": "workspace:*",
     "@chimera-rx/summoner": "workspace:*",
     "@fastify/cookie": "11.1.5",

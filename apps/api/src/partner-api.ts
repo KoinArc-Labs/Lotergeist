@@ -6,6 +6,7 @@ import { authenticate, issueToken, logCall, requireScope, type Caller, type Scop
 import { listMessages, respond } from "./prescriber";
 import { verifySignature } from "./webhooks";
 import { runAgent } from "./agents";
+import { lotTrace } from "./epcis";
 
 declare module "fastify" { interface FastifyRequest { caller?: Caller; t0?: number } }
 
@@ -97,6 +98,13 @@ const TOOLS = {
     input: z.object({ since: z.string().max(10).optional() }),
     schema: { type: "object", properties: { since: { type: "string", description: "YYYY-MM-DD" } }, additionalProperties: false },
     run: (ctx: Ctx, a: any) => ({ lots: recalledLots(ctx, a.since) })
+  },
+  lot_trace: {
+    scope: "inventory.read" as Scope,
+    description: "EPCIS 2.0 trace events (receiving, storing, dispensing, holding and so on) for one lot of a product at this pharmacy. Read-only, no patient ids. Sandbox data, not a filing.",
+    input: z.object({ ndc: z.string().min(10).max(13), lot: z.string().min(1).max(20), limit: z.number().int().min(1).max(500).default(200) }),
+    schema: { type: "object", properties: { ndc: { type: "string" }, lot: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 500, default: 200 } }, required: ["ndc", "lot"], additionalProperties: false },
+    run: (ctx: Ctx, a: any) => lotTrace(ctx, productRow(ctx, a.ndc).ndc11, a.lot, a.limit)
   },
   // The read-only AI agents (agents/). They run with no patient scope: the copilot is a technician-level caller, so it cannot list patients.
   agent_night_watch_digest: {

@@ -1,0 +1,8 @@
+{
+  "label": "SANDBOX verifier fixtures. Synthetic. Not a manufacturer, wholesaler or Verification Router Service response.",
+  "commissioned": [
+    { "gtin": "00370004088121", "serial": "DEMO-OK-01", "lot": "224016", "expiry": "2028-02-29" },
+    { "gtin": "00370004417051", "serial": "DEMO-OK-02", "lot": "MP0925A", "expiry": "2027-09-30" }
+  ],
+  "notCommissionedSerialPrefixes": ["SPOOF-", "FAKE-"]
+}

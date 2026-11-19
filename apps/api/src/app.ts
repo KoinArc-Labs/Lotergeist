@@ -17,6 +17,7 @@ import { addWebhook, deliveries, WEBHOOK_EVENTS } from "./webhooks";
 import { ALL_SCOPES, apiActivity, createPartner, listPartners, rotateSecret, SCOPES, securityPosture, seedPartners, updatePartner, type Scope } from "./integrations";
 import { registerPartnerApi } from "./partner-api";
 import { registerAgentRoutes } from "./agents";
+import { registerEpcisRoutes } from "./epcis";
 import { findPatientByPhone, patientProfile, refillSync, searchPatients } from "./patients";
 import { inboundCall, outreachResults, previewVoicemail, runOutreachAgent, startVoicemail, voicemailDraft } from "./outreach";
 import { fillQueue, printLabel, rxDetail, scanFill, sell, sendBack, verifyDispense } from "./fill";
@@ -377,6 +378,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
   // ---- partner surfaces: /oauth/token, /v1, /mcp, /fhir/r4 (their own auth, scopes and log)
   seedPartners(ctx);
   registerAgentRoutes(app, ctx); // AI agents (agents/): advisory, role-checked, audited
+  registerEpcisRoutes(app, ctx); // DSCSA trace (epcis.ts): EPCIS export/import, sandbox verifier, suspect cases
   await registerPartnerApi(app, ctx);
 
   // ---- built web app
