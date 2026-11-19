@@ -53,3 +53,4 @@ aidlc/diagnostics/
 .kiro/steering/aidlc-active-memory.md
 .kiro/agents/aidlc-scoped-review-*.md
 # END AI-DLC:gitignore
+.logs/
