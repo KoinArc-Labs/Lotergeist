@@ -393,10 +393,15 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     return reply.type("image/png").send(fs.readFileSync(f));
   });
   if (fs.existsSync(path.join(ctx.cfg.webDist, "index.html"))) {
-    await app.register(fastifyStatic, { root: ctx.cfg.webDist, wildcard: false });
+    // wildcard: true looks each file up when it is requested, so a `pnpm build:web` while the API runs serves the new hashed
+    // assets at once (wildcard: false lists dist once at start and 404s every asset built after that).
+    await app.register(fastifyStatic, { root: ctx.cfg.webDist, wildcard: true });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith("/api/")) return reply.code(404).send({ error: "not found" });
-      return reply.type("text/html").send(fs.readFileSync(path.join(ctx.cfg.webDist, "index.html")));
+      const url = req.url.split("?")[0]!;
+      if (url.startsWith("/api/")) return reply.code(404).send({ error: "not found" });
+      // A missing file (an old hashed asset) is a real 404, never index.html served as a script.
+      if (/\.[A-Za-z0-9]{1,8}$/.test(url)) return reply.code(404).type("text/plain").send("not found");
+      return reply.type("text/html").header("Cache-Control", "no-cache").send(fs.readFileSync(path.join(ctx.cfg.webDist, "index.html")));
     });
   }
   return app;

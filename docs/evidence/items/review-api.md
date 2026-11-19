@@ -10,7 +10,8 @@ Scope: apps/api/ and packages/. Sandbox pilot review. Nothing here is a complian
 |---|---|
 | c8fa5df | fix: encrypt agent records and drafts, fail closed on a wrong key, whole-token lot gate, fill/sell double-submit, admin and cashier PHI reads, 404 for unknown recalls; role-by-route matrix and probes |
 | e6134c1 | fix: recall text preview is staff-only; matrix re-signs in after reset so the scenario route is checked |
-| (this file) | docs: REV-API evidence |
+| 1b62e93 | docs: REV-API evidence |
+| (follow-up) | fix: REV-API serve the web build from disk per request (bug 7) |
 
 ## Bugs found and fixed
 
@@ -22,6 +23,7 @@ Scope: apps/api/ and packages/. Sandbox pilot review. Nothing here is a complian
 | 4 | High | Double submit of a fill scan dispensed two packages for one prescription. `scanFill` checked `status = 'to_fill'` before awaiting the Rx Watcher model call, then wrote without checking again. | Two concurrent scans with a 50 ms model: both returned 200 | Conditional updates inside the transaction (`... AND status = 'to_fill'`, package `... AND status = 'on_shelf'`, sell `... AND state = 'verified'`); the second request gets 409 | review-probes.test.ts "two concurrent fill scans" (fails before the fix with [200, 200]) |
 | 5 | Medium | Admin could read the fill queue and any prescription (names, DOB, phone, allergies); admin and cashier could read the sandbox outbox (every message body and address) and the recall message preview (a patient's name and fields); `POST /api/recalls/:id/preview` merged patient fields for any signed-in role. | GET probe per role | `GET /api/rx`, `/api/rx/:rx`: cashier, technician, pharmacist. `GET /api/outbox`, `/api/recalls/:id/messages`, `POST /api/recalls/:id/preview`: technician, pharmacist. Search returns no prescriptions to admin | review-probes.test.ts "least privilege"; review-matrix.test.ts |
 | 6 | Low | `POST /api/recalls/<unknown>/manufacturer-response` crashed with 500; `close` and `return-pickup` wrote an audit row for a recall that does not exist. The manufacturer response hard-coded "Elm Street Pharmacy · Store 7" and "J. Rivera", so store 2 sent the wrong store name. | Matrix run (pharmacist 500) | `mustExist()` gives 404; body uses the actor's store name and the pharmacist's own name | review-probes.test.ts "error bodies" |
+| 7 | Medium (demo) | The API listed `apps/web/dist` once at start (`@fastify/static` with `wildcard: false`). After `pnpm build:web` with the API running, the new hashed assets fell through to the not-found handler and came back as index.html (`text/html`), so the browser refused the module script and the page was blank until a restart. Reported by the web reviewer (docs/evidence/items/review-web.md, item 6). | Web reviewer's repro; regression test fails on the old code with "expected 'text/html' to match /javascript/" | apps/api/src/app.ts: `wildcard: true`, so each request is looked up on disk. The not-found handler gives a plain 404 to a missing file (any path with an extension), and serves index.html (`Cache-Control: no-cache`) only for app routes. `/api/*` keeps its JSON 404 | apps/api/test/review-static.test.ts (rebuilds a temp dist while the app runs). Live on :4520 with the real dist: asset 200 `application/javascript`, missing asset 404 `text/plain`, `/recalls` 200 `text/html` |
 
 ## Role-by-route matrix (state-changing routes)
 
@@ -162,7 +164,7 @@ Notes on this table:
 ## Commands run
 
 - `pnpm typecheck`: all 6 workspaces done, 0 errors.
-- `pnpm test` (vitest run): 18 files, 335 tests passed. My new tests: review-matrix (4), review-encryption (1), review-keys (3), review-probes (13), coroner verbatim-gate (18) = 39.
+- `pnpm test` (vitest run): 19 files, 336 tests passed. My new tests: review-matrix (4), review-encryption (1), review-keys (3), review-probes (13), review-static (1), coroner verbatim-gate (18) = 40.
 - `bash scripts/phi-guard.sh --all`: exit 0.
 - Live server: `API_PORT=4520 DATA_DIR=<mktemp> NIGHT_WATCH=0 OFFLINE=1 LLM_PROVIDER=mock npx tsx src/server.ts`; then the wrong-key restart, `npx tsx scripts/keys.ts rotate` and `status` with the server stopped, and a restart for `/api/audit/verify`. Ports 4000, 5173 and 5174 were not touched; my 4520 server was stopped afterwards.
 - `pnpm build:web` not run: no web files changed.
