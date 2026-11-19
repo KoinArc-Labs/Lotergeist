@@ -77,6 +77,7 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
             <span className="nav-label">Care</span>
             {user.role !== "cashier" && item("/patients", "Patients", NavIcon.patients)}
             {item("/recalls", "Recalls", Icon.shield(), badges.recalls ? <span className="count red">{badges.recalls}</span> : null)}
+            {(user.role === "technician" || user.role === "pharmacist") && item("/dscsa", "DSCSA & trace", Icon.shield())}
           </>}
           {user.role !== "cashier" && <>
             <span className="nav-label">AI</span>

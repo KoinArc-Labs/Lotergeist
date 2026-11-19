@@ -168,7 +168,7 @@ function Review({ r, imp, onChange, back, next }: { r: any; imp: any; onChange: 
       </div>
 
       <section aria-labelledby="pts" style={{ ...sec, overflow: "hidden" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px", flexWrap: "wrap", gap: 10 }}><h2 id="pts" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Affected patients</h2><span style={{ fontSize: 13, color: C.dimmer }}>Matched by lot recorded at fill</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px", flexWrap: "wrap", gap: 10 }}><h2 id="pts" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Affected patients</h2><span style={{ fontSize: 13, color: C.dimmer }}>Matched by lot recorded at fill</span>{r.lots.some((l: any) => l.confirmed) ? <a href={`/api/recalls/${r.id}/trace-export`} download title="EPCIS 2.0 events for the confirmed recalled lots. Patient ids only, no names. Sandbox, not a filing." style={btn("ghost", { minHeight: 36 })}>Export trace (EPCIS)</a> : <span style={{ fontSize: 12, color: C.dimmer }}>Confirm a lot to export its trace</span>}</div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse", fontSize: 14 }}>
             <thead><tr style={{ textAlign: "left", fontSize: 12, color: C.dimmer, background: C.well }}>{["Patient", "Rx #", "Lot", "Sold", "Contact"].map((h) => <th key={h} scope="col" style={{ padding: "12px 20px", fontWeight: 500 }}>{h}</th>)}</tr></thead>

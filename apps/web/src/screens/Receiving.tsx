@@ -6,6 +6,7 @@ import { gs1Text } from "../lib/gs1";
 import { play } from "../lib/sound";
 import { ScanPanel } from "../components/ScanPanel";
 import { DataMatrix } from "../components/DataMatrix";
+import { VerifyPanel } from "../components/VerifyPanel";
 import { btn, C, CheckList, ErrorBox, Footer, Icon, input, label, MONO, pill } from "../components/kit";
 
 const ZONE: Record<string, { tint: string; pill: [string, string] }> = {
@@ -138,6 +139,7 @@ export function Receiving({ user }: { user: User }) {
                   <span style={pill(zone.pill[0], zone.pill[1], { fontSize: 13, fontWeight: 600, padding: "6px 12px" })}>{out.suggestion.zoneLabel}</span>
                 </div>
                 <CheckList checks={out.checks} />
+                <VerifyPanel key={out.packageId} out={out} user={user} />
                 {out.noSerial && <p style={{ margin: 0, fontSize: 13, color: C.amber2 }}>No serial on this label. It got an internal id; check the supplier paperwork by hand.</p>}
 
                 {out.needsWitness && out.canConfirm && (
