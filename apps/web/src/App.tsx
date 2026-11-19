@@ -18,6 +18,7 @@ import { StockHelp } from "./screens/StockHelp";
 import { AIAgents } from "./screens/AIAgents";
 import { Transfers } from "./screens/Transfers";
 import { Dscsa } from "./screens/Dscsa";
+import { Refills } from "./screens/Refills";
 
 export function App() {
   const qc = useQueryClient();
@@ -46,6 +47,7 @@ export function App() {
         <Route path="/stock" element={<StockHelp user={user} />} />
         <Route path="/agents" element={<AIAgents user={user} />} />
         <Route path="/dscsa" element={<Dscsa user={user} />} />
+        <Route path="/refills" element={<Refills user={user} />} />
         <Route path="/labels" element={<Labels />} />
         <Route path="/outbox" element={<Outbox />} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -232,12 +232,32 @@ function Notify({ r, imp, back, onSent }: { r: any; imp: any; back: () => void; 
     },
     onSuccess: onSent, onError: (e) => setErr(msg(e))
   });
+  // The Recall Outreach Drafter writes warmer wording. It only fills the boxes below: the pharmacist edits, attests and sends through this same flow.
+  const [aiNote, setAiNote] = useState("");
+  const useAi = useMutation({
+    mutationFn: () => post(`/api/agents/outreach-drafter/run`, { input: { recallId: r.id } }),
+    onSuccess: (d: any) => {
+      const tp = d.run?.gatedOutput?.templates;
+      if (!tp) { setErr("The AI draft did not come back. The approved wording is still in place."); return; }
+      const phone = pv?.fields?.pharmacy_phone ?? "(555) 010-2200";
+      const lit = (x: string) => x.split("{pharmacy_phone}").join(phone);
+      setT({ sms: lit(tp.sms), emailSubject: tp.emailSubject, emailBody: lit(tp.emailBody) });
+      setScript(tp.voicemail); setHeard(null); setAttest(false); setErr("");
+      const n = Object.values(d.run.gatedOutput.source ?? {}).filter((x) => x === "ai").length;
+      setAiNote(`${n} of 4 pieces are AI wording${d.run.dropped?.length ? `; ${d.run.dropped.length} fell back to the approved text` : ""}. Nothing was sent. Read it, edit it, then attest.`);
+    },
+    onError: (e) => setErr(msg(e))
+  });
   if (!t || !vm.data || script === null) return <p style={{ color: C.dim }}>Loading the draft…</p>;
   const v = vm.data;
   const voiceLabel = v.voice.provider === "browser" ? `This device's voice (${deviceVoiceName()})` : `${v.voice.voice} · ${v.voice.provider}`;
   const area = { resize: "vertical", padding: 14, borderRadius: 10, border: `1px solid ${C.line2}`, background: C.well, color: C.ink, font: "inherit", fontSize: 15, lineHeight: 1.5 } as const;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "var(--accent-soft)" }}>
+        <button className="btn" disabled={useAi.isPending} onClick={() => useAi.mutate()}>{useAi.isPending ? "Drafting…" : "Use AI draft"}</button>
+        <span style={{ flex: "1 1 320px", fontSize: 13, lineHeight: 1.5 }}><strong>AI draft, a pharmacist approves.</strong> {aiNote || "Loads friendlier wording into the text, email and voicemail boxes below. You can still edit it, and nothing is sent until you attest."}</span>
+      </div>
       <section aria-labelledby="vm" className="card pad" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <div><h2 id="vm" className="h2">Pharmacist voicemail · {v.callCount} patient{v.callCount === 1 ? "" : "s"}</h2><p className="sub">One call per patient from the pharmacy number, {v.window}. The message never names the medicine or the reason. Press 1 transfers to the pharmacist.</p></div>
