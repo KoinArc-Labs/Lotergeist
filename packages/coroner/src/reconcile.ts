@@ -4,12 +4,28 @@ import type { LlmOutput } from "./llm";
 import type { RegexResult } from "./regex-pass";
 import { REVIEW_THRESHOLD, type Autopsy, type ExtractedLot, type ExtractedNdc } from "./types";
 
-/** Whitespace-stripped, upper-cased text: the basis of the COR-3 verbatim check. */
+/** Whitespace-stripped, upper-cased text. Kept for callers that compare loosely; the COR-3 gate no longer uses it. */
 export const squash = (s: string) => s.replace(/\s+/g, "").toUpperCase();
 
+/** Runs of whitespace become one space, ends trimmed, case folded. Nothing else changes, so lookalike letters and zero-width marks stay different. */
+const fold = (s: string) => s.replace(/\s+/g, " ").trim().toUpperCase();
+const LOT_CHAR = /[A-Z0-9\-\/]/;
+
+/**
+ * COR-3: the value must be printed in the source as a whole token, case-insensitive and with whitespace runs treated as one space.
+ * Not allowed: joining two tokens (spaces removed), a prefix or middle slice of a longer token ("PRORX0509" out of "PRORX050925-1"),
+ * or a string that runs across punctuation into the next field. The characters on both sides of the match must not continue a lot code.
+ */
 export function appearsVerbatim(source: string, value: string): boolean {
-  const v = squash(value);
-  return v.length > 0 && squash(source).includes(v);
+  const v = fold(value);
+  if (!v) return false;
+  const src = fold(source);
+  for (let at = src.indexOf(v); at !== -1; at = src.indexOf(v, at + 1)) {
+    const before = at === 0 ? "" : src[at - 1]!;
+    const after = at + v.length >= src.length ? "" : src[at + v.length]!;
+    if ((!before || !LOT_CHAR.test(before)) && (!after || !LOT_CHAR.test(after))) return true;
+  }
+  return false;
 }
 
 function normaliseLlmExpiry(e: string | null | undefined): string | undefined {

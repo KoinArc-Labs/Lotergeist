@@ -306,8 +306,16 @@ export function recallResults(ctx: Ctx, recallId: string) {
   };
 }
 
+/** An unknown recall id is a 404, not a crash or a silent audit row for something that does not exist. */
+function mustExist(ctx: Ctx, recallId: string) {
+  const r = ctx.db.get<any>("SELECT * FROM recalls WHERE id = ?", recallId);
+  if (!r) throw new HttpError(404, "Unknown recall.");
+  return r;
+}
+
 export function scheduleReturn(ctx: Ctx, actor: Actor, recallId: string) {
   needPharmacist(actor);
+  mustExist(ctx, recallId);
   const units = recallImpact(ctx, recallId).unitsHeld;
   const when = new Date(ctx.now() + 86_400_000).toISOString().slice(0, 10);
   ctx.db.run("UPDATE packages SET location = 'RTV-1', zone = 'rtv' WHERE status = 'quarantined' AND lot_id IN (SELECT l.id FROM lots l JOIN recall_lots rl ON upper(rl.lot) = upper(l.lot) WHERE rl.recall_id = ? AND rl.confirmed_at IS NOT NULL)", recallId);
@@ -318,9 +326,10 @@ export function scheduleReturn(ctx: Ctx, actor: Actor, recallId: string) {
 
 export function respondToManufacturer(ctx: Ctx, actor: Actor, recallId: string) {
   needPharmacist(actor);
-  const r = ctx.db.get<any>("SELECT * FROM recalls WHERE id = ?", recallId)!;
+  const r = mustExist(ctx, recallId);
   const imp = recallImpact(ctx, recallId);
-  const body = `Recall ${recallId} response from Elm Street Pharmacy · Store 7\n\nUnits found on shelf and quarantined: ${imp.unitsHeld}\nPatients who received the product: ${imp.patientCount}\nPatients notified: ${imp.messageCount} messages, ${imp.callCount} on the phone list\n\nJ. Rivera, PharmD`;
+  const storeName = ctx.db.get<{ name: string }>("SELECT name FROM stores WHERE id = ?", actor.storeId)?.name ?? actor.storeId;
+  const body = `Recall ${recallId} response from ${storeName}\n\nUnits found on shelf and quarantined: ${imp.unitsHeld}\nPatients who received the product: ${imp.patientCount}\nPatients notified: ${imp.messageCount} messages, ${imp.callCount} on the phone list\n\n${actor.name}`;
   const id = Number(ctx.db.run("INSERT INTO outbox (channel, to_addr, subject, body, status, created_at, provider) VALUES (?,?,?,?,?,?,?)", "email", `recalls@${r.firm.toLowerCase().replace(/[^a-z]+/g, "")}.example.com`, `Response to recall ${recallId}`, body, "sent", ctx.now(), "sandbox").lastInsertRowid);
   ctx.db.run("INSERT INTO recall_actions (recall_id, kind, payload, at, by) VALUES (?,?,?,?,?)", recallId, "manufacturer_response", JSON.stringify({ outbox: id }), ctx.now(), actor.name);
   audit(ctx, actor, "recall.manufacturer_response", "recall", recallId);
@@ -329,6 +338,7 @@ export function respondToManufacturer(ctx: Ctx, actor: Actor, recallId: string) 
 
 export function closeRecall(ctx: Ctx, actor: Actor, recallId: string) {
   needPharmacist(actor);
+  mustExist(ctx, recallId);
   ctx.db.run("UPDATE recalls SET status = 'closed', step = 'done' WHERE id = ?", recallId);
   audit(ctx, actor, "recall.close", "recall", recallId);
 }

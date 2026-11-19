@@ -3,6 +3,7 @@ import { keyStatus, rotateKeys } from "../src/keyadmin";
 import { createStores } from "../src/stores";
 
 // pnpm --filter @chimera-rx/api keys:status | keys:rotate. Prints counts and key ids only, never values or keys.
+process.env.ALLOW_UNREADABLE_KEYS = process.argv[2] === "status" ? "1" : process.env.ALLOW_UNREADABLE_KEYS;
 const cmd = process.argv[2];
 const cfg = loadConfig();
 const { reg } = createStores(cfg);

@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import { cipherFor, ENVELOPE_PREFIX, type FieldCipher, type KeyProvider } from "./crypto";
+import { CryptoError, cipherFor, ENVELOPE_PREFIX, type FieldCipher, type KeyProvider } from "./crypto";
 import { PROTECTED, rewriteProtected } from "./protect";
 
 // vite-node strips the "node:" prefix for sqlite, so load it through require.
@@ -25,7 +25,22 @@ export class Db {
     this.raw = new Sqlite(file);
     this.raw.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.migrate();
+    this.assertKeyMatches();
     this.encryptAtRest();
+  }
+
+  /**
+   * Fail closed on a wrong or lost key (REV-API): if stored values were sealed with a key this process does not hold, refuse to
+   * open the database. Otherwise the API would serve ciphertext as patient names and write new rows under a different key.
+   */
+  private assertKeyMatches() {
+    if (process.env.ALLOW_UNREADABLE_KEYS === "1") return; // the keys:status CLI may inspect a database whose key is missing
+    const missing = new Set<string>();
+    for (const [table, cols] of Object.entries(PROTECTED)) for (const col of cols) {
+      const ids = this.raw.prepare(`SELECT DISTINCT substr(${col}, ${ENVELOPE_PREFIX.length + 1}, 8) AS id FROM ${table} WHERE ${col} LIKE '${ENVELOPE_PREFIX}%'`).all() as { id: string }[];
+      for (const r of ids) if (!this.cipher.hasKey(r.id)) missing.add(r.id);
+    }
+    if (missing.size) throw new CryptoError("unknown_key", `The database holds values sealed with key id(s) ${[...missing].join(", ")} that this process does not have. Restore the original DATA_KEY or data/.keys folder; refusing to start so no value is shown as ciphertext or re-sealed under another key.`);
   }
 
   private open<T>(row: Record<string, any>): T {
@@ -206,6 +221,15 @@ export class Db {
       CREATE TABLE IF NOT EXISTS suspect_cases (
         id INTEGER PRIMARY KEY AUTOINCREMENT, opened_at INTEGER, opened_by TEXT, source TEXT, verification_id INTEGER, recall_id TEXT, gtin TEXT, lot TEXT,
         serial TEXT, package_id INTEGER, status TEXT, note TEXT, closed_at INTEGER, closed_by TEXT, close_note TEXT
+      );
+      -- agent records and drafts (agents/agent.ts creates them too): declared here so a file database can encrypt them when it opens
+      CREATE TABLE IF NOT EXISTS ai_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT, provider TEXT, model TEXT, started_at INTEGER, latency_ms INTEGER, mode TEXT,
+        input TEXT, rule_output TEXT, raw_output TEXT, gated_output TEXT, dropped TEXT, error TEXT, by_user TEXT
+      );
+      CREATE TABLE IF NOT EXISTS ai_drafts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER, recall_id TEXT, patient_id TEXT, channel TEXT, subject TEXT, body TEXT,
+        status TEXT DEFAULT 'draft', created_at INTEGER
       );
       CREATE TABLE IF NOT EXISTS trace_imports (
         id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, by_name TEXT, event_id TEXT UNIQUE, kind TEXT, gtin TEXT, lot TEXT, serial TEXT, expiry TEXT,

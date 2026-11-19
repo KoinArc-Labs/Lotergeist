@@ -16,7 +16,11 @@ export const PROTECTED: Record<string, readonly string[]> = {
   outreach_calls: ["script", "note"],
   audio: ["text"],
   rx_findings: ["title", "body", "evidence"],
-  audit: ["reason"]
+  audit: ["reason"],
+  // REV-API: agent records quote the patients and drugs they were given; refill and recall drafts name the patient.
+  ai_runs: ["input", "rule_output", "raw_output", "gated_output", "dropped"],
+  ai_drafts: ["subject", "body"],
+  suspect_cases: ["note", "close_note"]
 };
 
 /** Split on commas that are not inside quotes or parentheses. */

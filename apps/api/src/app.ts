@@ -180,8 +180,8 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
   });
 
   // ---- fill & pickup
-  app.get("/api/rx", async () => fillQueue(ctx));
-  app.get("/api/rx/:rx", async (req) => rxDetail(ctx, A(req), (req.params as { rx: string }).rx));
+  app.get("/api/rx", async (req) => { only(req, "cashier", "technician", "pharmacist"); return fillQueue(ctx); }); // admin has no job in the fill queue (patient names)
+  app.get("/api/rx/:rx", async (req) => { only(req, "cashier", "technician", "pharmacist"); return rxDetail(ctx, A(req), (req.params as { rx: string }).rx); });
   // ---- Rx Watcher and the prescriber channel
   const rxp = (req: FastifyRequest) => (req.params as { rx: string }).rx;
   app.get("/api/rx/:rx/review", async (req) => { only(req, "technician", "pharmacist"); return reviewView(ctx, rxp(req)); });
@@ -224,6 +224,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     return { recall: v, impact: recallImpact(ctx, rid(req)) };
   });
   app.get("/api/recalls/:id/messages", async (req) => {
+    only(req, "technician", "pharmacist"); // the preview names a patient
     const d = messageDraft(ctx, rid(req));
     return { ...d, smsPreview: merge(d.sms, d.fields), smsInfo: smsSegments(merge(d.sms, d.fields)) };
   });
@@ -271,6 +272,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
 
   // ---- sandbox outbox
   app.get("/api/outbox", async (req) => {
+    only(req, "technician", "pharmacist"); // bodies and addresses of patient messages
     const q = req.query as { recall?: string };
     return ctx.db.all(`SELECT o.*, n.recall_id, n.patient_id FROM outbox o LEFT JOIN notifications n ON n.id = o.notification_id ${q.recall ? "WHERE n.recall_id = ?" : ""} ORDER BY o.id DESC LIMIT 200`, ...(q.recall ? [q.recall] : []));
   });
@@ -291,7 +293,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     if (q.length < 2) return { lots: [], rx: [] };
     const g = parseElementString(q);
     if (g.ok && g.value.lot) return { lots: listLots(ctx, { q: g.value.lot }).rows.slice(0, 6), rx: [], scanned: { lot: g.value.lot, serial: g.value.serial ?? "" } };
-    return { lots: listLots(ctx, { q }).rows.slice(0, 6), rx: fillQueue(ctx).filter((r) => [r.rx, r.patient, r.drug].some((v) => v.toLowerCase().includes(q.toLowerCase()))).slice(0, 6) };
+    return { lots: listLots(ctx, { q }).rows.slice(0, 6), rx: A(req).role === "admin" ? [] : fillQueue(ctx).filter((r) => [r.rx, r.patient, r.drug].some((v) => v.toLowerCase().includes(q.toLowerCase()))).slice(0, 6) };
   });
 
   app.get("/api/audit", async (req) => { only(req, "pharmacist", "admin"); return ctx.db.all("SELECT id, at, user_name, workstation, action, entity, entity_id, reason, hash FROM audit ORDER BY id DESC LIMIT 100"); });
