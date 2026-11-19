@@ -34,7 +34,7 @@ const ALLOW: Record<string, R[]> = {
   "/api/refills/draft": ["technician", "pharmacist"],
   "/api/dispenses/:id/sell": ["cashier", "pharmacist"],
   "/api/rx/:rx/decision": ["pharmacist"],
-  "/api/recalls/:id/preview": ROLES.slice(), // renders merge fields into the pharmacist's own text, writes nothing
+  "/api/recalls/:id/preview": ["technician", "pharmacist"], // merges a patient's fields: not for cashier or admin
   "/api/agents/provider": ["admin", "pharmacist"], "/api/agents/provider/test": ["admin", "pharmacist"],
   "/api/agents/:id/run": ["technician", "admin", "pharmacist"] // coroner
 };
@@ -72,6 +72,13 @@ let app: FastifyInstance; let db: Db;
 const cookies: Record<string, string> = { anon: "" };
 const table: string[] = [];
 
+async function signIn() {
+  for (const r of ROLES.filter((x) => x !== "anon")) {
+    const res = await app.inject({ method: "POST", url: "/api/auth/login", payload: { storeId: "store-7", email: `${WHO[r]}@elmstreetrx.example`, password: PW, trusted: true } });
+    cookies[r] = res.cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  }
+}
+
 beforeAll(async () => {
   const cfg = loadConfig({}, { sqlitePath: ":memory:", sandboxDelayMs: 20, today: "2026-11-18", nightWatch: false, assetsDir: "/nonexistent", webDist: "/nonexistent" });
   db = new Db(":memory:");
@@ -103,6 +110,7 @@ describe("REV-API role-by-route matrix", () => {
     for (const r of sourceRoutes().filter((x) => x.method === "POST" && !x.url.startsWith("/api/auth/") && x.url !== "/api/transfers").sort((a, b) => Number(LAST.includes(a.url)) - Number(LAST.includes(b.url)))) {
       const allowed = ALLOW[r.url] ?? ["pharmacist"];
       const row: string[] = [];
+      if (LAST.includes(r.url)) await signIn(); // a reset signs everyone out
       for (const role of ROLES) {
         const res = await app.inject({ method: "POST", url: concrete(r.url), headers: { cookie: cookies[role]! }, payload: BODY[r.url] as never });
         row.push(`${role}=${res.statusCode}`);

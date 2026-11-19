@@ -229,6 +229,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     return { ...d, smsPreview: merge(d.sms, d.fields), smsInfo: smsSegments(merge(d.sms, d.fields)) };
   });
   app.post("/api/recalls/:id/preview", async (req) => {
+    only(req, "technician", "pharmacist"); // merges the first patient's fields into the text
     const b = z.object({ sms: z.string().max(1000), emailSubject: z.string().max(300), emailBody: z.string().max(6000) }).parse(req.body);
     const d = messageDraft(ctx, rid(req));
     const sms = merge(b.sms, d.fields);
