@@ -4,6 +4,8 @@ import { seedPartners } from "./integrations";
 import { reviewPending } from "./rxwatcher";
 import { seedDatabase } from "./seed";
 import { ingestFaxInbox } from "./today";
+import { seedStore2 } from "./seed-store2";
+import { STORE_1, STORE_2 } from "./stores";
 
 /**
  * Scenario library (FR6): each scenario resets the demo to a known state, then applies a small, synthetic change and
@@ -101,9 +103,16 @@ const APPLY: Record<string, (ctx: Ctx) => void> = {
 
 /** Wipe and re-seed the synthetic demo, as `POST /api/demo/reset` always did. */
 export async function resetDemo(ctx: Ctx, actor: Actor | null, scenarioId: string | null = null) {
-  ctx.db.clearAll();
-  seedDatabase(ctx.db, ctx.cfg, ctx.now());
-  seedPartners(ctx);
+  if (ctx.stores) {
+    // two stores: rebuild both, so a reset never leaves one store out of step with the other
+    const reg = ctx.stores;
+    for (const id of reg.ids) reg.run(id, () => { ctx.db.clearAll(); if (id === STORE_2) seedStore2(reg.db(id), ctx.now()); else seedDatabase(reg.db(id), ctx.cfg, ctx.now()); });
+    reg.run(STORE_1, () => seedPartners(ctx));
+  } else {
+    ctx.db.clearAll();
+    seedDatabase(ctx.db, ctx.cfg, ctx.now());
+    seedPartners(ctx);
+  }
   if (scenarioId) {
     APPLY[scenarioId]?.(ctx);
     ctx.db.run("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", META_SCENARIO, scenarioId);

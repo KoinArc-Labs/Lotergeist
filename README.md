@@ -38,6 +38,7 @@ The Docker build was written but not run on the machine that produced this repo 
 
 ## Also in this pilot
 
+- **Two stores**: Elm Street · Store 7 and Birch Avenue · Store 2, each with its own database, staff, patients and stock. Pick the pharmacy on the sign-in page (Store 2 pharmacist: `s.okoro@birchavenuerx.example`, same password). A pharmacist moves packages to the other store on **Transfers**; each package keeps its lot and serial and both stores log it. A recall confirmed in one store is mirrored to the other, so the lot is blocked in both at receiving, fill, the register and transfers, while each store lists only its own units and patients. `TWO_STORES=0` runs the original single store.
 - **Register** (cashier and pharmacist): over-the-counter items by retail barcode (USB scanner or camera) or name, plus one patient's verified prescriptions in the same sale. Prescriptions need photo ID, counseling and signature; unverified or recalled-lot fills are blocked by name. "Paid" is a label, no payment is processed, and over-the-counter stock is not tracked.
 - **Stock help** (technician sees, pharmacist decides): reorder, expiry-risk and shortage suggestions from rules, with the numbers shown. An LLM, if configured, only adds a plain-words explanation. Nothing is ordered or moved for you.
 - **Second sign-in factor**: `MFA=1 docker compose up` turns it on.
@@ -70,6 +71,7 @@ Open http://localhost:5173. All demo accounts share the password `moonlight-rx-2
 | `k.patel@elmstreetrx.example` | Technician | Receiving, inventory, fill |
 | `m.diaz@elmstreetrx.example` | Cashier | Pickup only, no clinical details |
 | `s.grant@elmstreetrx.example` | Admin | Integrations only |
+| `s.okoro@birchavenuerx.example` | Pharmacist, Store 2 | Everything in Store 2 only |
 
 The demo store is Elm Street Pharmacy · Store 7, with a recall fax for D-0417-2026 waiting in the inbox. A pharmacist can reset all data from the Receiving or Recall screens.
 

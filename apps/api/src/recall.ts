@@ -1,3 +1,4 @@
+import { propagateRecall } from "./crossstore";
 import PDFDocument from "pdfkit";
 import { autopsy } from "@chimera-rx/coroner";
 import { createLlmFromEnv } from "@chimera-rx/coroner";
@@ -157,6 +158,7 @@ export function quarantineRecalled(ctx: Ctx, actor: Actor | null, recallId: stri
     }
   }
   if (moved) { audit(ctx, actor, "recall.quarantine", "recall", recallId, undefined, { units: moved }); emit(ctx, "recall.matched", { recallId, unitsQuarantined: moved }); }
+  propagateRecall(ctx, recallId, quarantineRecalled); // two stores: the lot is blocked in both (Q4)
   return moved;
 }
 

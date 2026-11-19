@@ -26,6 +26,8 @@ import { confirmPutaway, deliveryView, listDeliveries, PROBLEM_KINDS, reportProb
 import { seedDatabase, expectedPackages, FILL_PACKAGES, PRODUCTS } from "./seed";
 import { gtinOf, ndc11Digits } from "./domain";
 import { ingestFaxInbox, pollOpenFda, todayView } from "./today";
+import { splitStore, withStore } from "./stores";
+import { otherStores, transferPackages } from "./crossstore";
 import { listScenarios, resetDemo, scenarioLabels, startScenario } from "./scenarios";
 
 declare module "fastify" { interface FastifyRequest { actor?: Actor; user?: SessionUser } }
@@ -50,12 +52,24 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     return reply.code(err.statusCode ?? 500).send({ error: err.message ?? "Something went wrong." });
   });
 
+  // ---- two stores (FR4): the session cookie says which store's database every query in this request uses
+  const stores = ctx.stores;
+  if (stores) {
+    app.addHook("onRequest", (req, _reply, done) => {
+      const raw = /(?:^|;\s*)lg_session=([^;]+)/.exec(req.headers.cookie ?? "")?.[1];
+      stores.enter(splitStore(raw ? decodeURIComponent(raw) : undefined, stores).store, done);
+    });
+  }
+  const tokenOf = (req: FastifyRequest) => (stores ? splitStore(req.cookies[COOKIE], stores).token : req.cookies[COOKIE]);
+  const inStore = <T,>(id: string, fn: () => T): T => (stores ? stores.run(id, fn) : fn());
+  const curStore = () => stores?.current ?? "store-7";
+
   // ---- sessions: everything under /api needs one, except sign-in and the public config
   const PUBLIC = new Set(["/api/health", "/api/auth/login", "/api/auth/sso", "/api/auth/config", "/api/auth/logout", "/api/auth/verify", "/api/auth/demo-code"]);
   app.addHook("preHandler", async (req: FastifyRequest, reply: FastifyReply) => {
     const url = req.url.split("?")[0]!;
     if (!url.startsWith("/api/") || PUBLIC.has(url) || url.startsWith("/api/auth/demo-code/")) return;
-    const s = actorFromToken(ctx, req.cookies[COOKIE]);
+    const s = actorFromToken(ctx, tokenOf(req));
     if (!s) return reply.code(401).send({ error: "Please sign in.", code: "unauthenticated" });
     req.actor = s.actor;
     req.user = s.user;
@@ -69,42 +83,51 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
 
   // ---- auth
   app.get("/api/auth/config", async () => ({
-    stores: ctx.db.all<{ id: string; name: string }>("SELECT id, name FROM stores"),
+    stores: stores ? stores.ids.flatMap((id) => stores.run(id, () => ctx.db.all<{ id: string; name: string }>("SELECT id, name FROM stores"))) : ctx.db.all<{ id: string; name: string }>("SELECT id, name FROM stores"),
+    storeDemos: stores ? { "store-2": { email: "s.okoro@birchavenuerx.example" } } : {},
     mfa: ctx.cfg.mfa,
     demo: ctx.cfg.demo ? { email: "j.rivera@elmstreetrx.example", password: "moonlight-rx-2026", note: "Demo environment: staff accounts j.rivera, k.patel and m.diaz share this password." } : null
   }));
   const loginBody = z.object({ storeId: z.string(), email: z.string().min(3).max(120), password: z.string().min(1).max(200), trusted: z.boolean().optional() });
-  const setCookie = (reply: FastifyReply, token: string, ttl: number) => reply.setCookie(COOKIE, token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: Math.floor(ttl / 1000), secure: ctx.cfg.cookieSecure });
+  const setCookie = (reply: FastifyReply, token: string, ttl: number) => reply.setCookie(COOKIE, stores ? withStore(curStore(), token) : token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: Math.floor(ttl / 1000), secure: ctx.cfg.cookieSecure });
   app.post("/api/auth/login", async (req, reply) => {
     const b = loginBody.parse(req.body);
     const ws = `${req.headers["user-agent"]?.includes("Mac") ? "Mac" : "PC"} workstation · ${req.ip}`;
-    if (ctx.cfg.mfa) {
-      // Second factor (FR7): the password is right, so a 6-digit code goes to the sandbox outbox and no session exists yet.
-      const u = checkPassword(ctx, b);
-      const c = startChallenge(ctx, u);
-      ctx.db.run("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", `mfa_trust:${c.challenge}`, JSON.stringify({ trusted: !!b.trusted, ws }));
-      return reply.code(202).send({ mfaRequired: true, challenge: c.challenge, expiresAt: c.expiresAt, demoHint: ctx.cfg.demo });
-    }
-    const r = login(ctx, { ...b, trusted: !!b.trusted, workstation: ws });
-    setCookie(reply, r.token, r.ttl);
-    audit(ctx, { id: r.user.id, name: r.user.name, role: r.user.role, storeId: r.user.storeId, workstation: ws }, "auth.login", "user", r.user.id);
-    return { user: r.user };
+    const sid = stores && stores.has(b.storeId) ? b.storeId : curStore();
+    return inStore(sid, () => {
+      if (ctx.cfg.mfa) {
+        // Second factor (FR7): the password is right, so a 6-digit code goes to the sandbox outbox and no session exists yet.
+        const u = checkPassword(ctx, b);
+        const c = startChallenge(ctx, u);
+        ctx.db.run("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", `mfa_trust:${c.challenge}`, JSON.stringify({ trusted: !!b.trusted, ws }));
+        return reply.code(202).send({ mfaRequired: true, challenge: stores ? withStore(sid, c.challenge) : c.challenge, expiresAt: c.expiresAt, demoHint: ctx.cfg.demo });
+      }
+      const r = login(ctx, { ...b, trusted: !!b.trusted, workstation: ws });
+      setCookie(reply, r.token, r.ttl);
+      audit(ctx, { id: r.user.id, name: r.user.name, role: r.user.role, storeId: r.user.storeId, workstation: ws }, "auth.login", "user", r.user.id);
+      return { user: r.user };
+    });
   });
   app.post("/api/auth/verify", async (req, reply) => {
     const b = z.object({ challenge: z.string().min(10).max(100), code: z.string().regex(/^\d{6}$/, "The code is 6 digits.") }).parse(req.body);
-    const userId = checkCode(ctx, b.challenge, b.code);
-    const meta = JSON.parse(ctx.db.get<{ value: string }>("SELECT value FROM meta WHERE key = ?", `mfa_trust:${b.challenge}`)?.value ?? "{}") as { trusted?: boolean; ws?: string };
-    ctx.db.run("DELETE FROM meta WHERE key = ?", `mfa_trust:${b.challenge}`);
-    const u = ctx.db.get<any>("SELECT * FROM users WHERE id = ?", userId)!;
-    const r = openSession(ctx, u, !!meta.trusted, meta.ws ?? "workstation");
-    setCookie(reply, r.token, r.ttl);
-    audit(ctx, { id: r.user.id, name: r.user.name, role: r.user.role, storeId: r.user.storeId, workstation: meta.ws ?? "workstation" }, "auth.login_mfa", "user", r.user.id);
-    return { user: r.user };
+    const sp = stores ? splitStore(b.challenge, stores) : { store: curStore(), token: b.challenge };
+    return inStore(sp.store, () => {
+      const userId = checkCode(ctx, sp.token, b.code);
+      const meta = JSON.parse(ctx.db.get<{ value: string }>("SELECT value FROM meta WHERE key = ?", `mfa_trust:${sp.token}`)?.value ?? "{}") as { trusted?: boolean; ws?: string };
+      ctx.db.run("DELETE FROM meta WHERE key = ?", `mfa_trust:${sp.token}`);
+      const u = ctx.db.get<any>("SELECT * FROM users WHERE id = ?", userId)!;
+      const r = openSession(ctx, u, !!meta.trusted, meta.ws ?? "workstation");
+      setCookie(reply, r.token, r.ttl);
+      audit(ctx, { id: r.user.id, name: r.user.name, role: r.user.role, storeId: r.user.storeId, workstation: meta.ws ?? "workstation" }, "auth.login_mfa", "user", r.user.id);
+      return { user: r.user };
+    });
   });
   // Demo only (FR7.3): shows the code from the sandbox outbox on the sign-in page, since a judge has no inbox to read.
   app.get("/api/auth/demo-code/:challenge", async (req) => {
     if (!ctx.cfg.demo || !ctx.cfg.mfa) throw new HttpError(404, "Not available.");
-    return { code: demoCodeHint(ctx, (req.params as { challenge: string }).challenge) };
+    const ch = (req.params as { challenge: string }).challenge;
+    const sp = stores ? splitStore(ch, stores) : { store: curStore(), token: ch };
+    return inStore(sp.store, () => ({ code: demoCodeHint(ctx, sp.token) }));
   });
   // Demo stand-in for "badge tap or SSO": signs in the pharmacist on duty. Disabled outside demo mode.
   app.post("/api/auth/sso", async (req, reply) => {
@@ -114,7 +137,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     setCookie(reply, r.token, r.ttl);
     return { user: r.user };
   });
-  app.post("/api/auth/logout", async (req, reply) => { const t = req.cookies[COOKIE]; if (t) logout(ctx, t); reply.clearCookie(COOKIE, { path: "/" }); return { ok: true }; });
+  app.post("/api/auth/logout", async (req, reply) => { const t = tokenOf(req); if (t) logout(ctx, t); reply.clearCookie(COOKIE, { path: "/" }); return { ok: true }; });
   app.get("/api/me", async (req) => ({ user: req.user, store: ctx.db.get("SELECT * FROM stores WHERE id = ?", A(req).storeId), today: todayIso(ctx) }));
 
   // ---- today
@@ -322,6 +345,10 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     await resetDemo(ctx, A(req));
     return { ok: true };
   });
+  // ---- two stores (FR4): see the other store, move stock to it
+  app.get("/api/stores", async (req) => ({ me: A(req).storeId, others: otherStores(ctx, A(req)) }));
+  app.post("/api/transfers", async (req) => transferPackages(ctx, A(req), z.object({ toStore: z.string().max(40), lotId: z.number().int(), qty: z.number().int() }).parse(req.body)));
+
   // ---- front-store register (FR3)
   app.get("/api/register/items", async (req) => findItems(ctx, A(req), String((req.query as { q?: string }).q ?? "")));
   app.get("/api/register/patients", async (req) => findPatients(ctx, A(req), String((req.query as { q?: string }).q ?? "")));

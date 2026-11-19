@@ -8,6 +8,7 @@ services:
     environment:
       DATASET: ${DATASET:-demo}
       MFA: ${MFA:-0}
+      TWO_STORES: ${TWO_STORES:-1}
       LLM_PROVIDER: none
       LG_DEMO: "1"
     volumes:

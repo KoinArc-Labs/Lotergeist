@@ -28,7 +28,9 @@ export function SignIn() {
   const [code, setCode] = useState("");
   const [hint, setHint] = useState<string | null>(null);
   const demo = cfg.data?.demo;
-  const store = cfg.data?.stores?.[0];
+  const [storeId, setStoreId] = useState("");
+  const stores: { id: string; name: string }[] = cfg.data?.stores ?? [];
+  const store = stores.find((x) => x.id === storeId) ?? stores[0];
   useEffect(() => { if (demo && !email) { setEmail(demo.email); setPassword(demo.password); } }, [demo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const done = () => qc.invalidateQueries({ queryKey: ["me"] });
@@ -111,7 +113,9 @@ export function SignIn() {
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <label htmlFor="store" style={lbl}>Pharmacy</label>
             <div style={{ position: "relative" }}>
-              <input id="store" value={store?.name ?? "Elm Street Pharmacy · Store 7"} readOnly style={{ ...field, padding: "0 40px 0 14px" }} />
+              <select id="store" value={store?.id ?? ""} onChange={(e) => { setStoreId(e.target.value); const sd = cfg.data?.storeDemos?.[e.target.value]; if (demo) { setEmail(sd?.email ?? demo.email); setPassword(demo.password); } }} disabled={stores.length < 2} style={{ ...field, padding: "0 40px 0 14px", appearance: "none" }}>
+                {stores.length ? stores.map((x) => <option key={x.id} value={x.id}>{x.name}</option>) : <option>Elm Street Pharmacy · Store 7</option>}
+              </select>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--muted)" strokeWidth="1.6" aria-hidden="true" style={{ position: "absolute", right: 14, top: 16 }}><path d="M4 6l4 4 4-4" /></svg>
             </div>
           </div>

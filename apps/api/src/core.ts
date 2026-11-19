@@ -19,6 +19,8 @@ export interface Ctx {
   onEvent?: (e: { id: number; type: string; payload: Record<string, unknown> }) => void;
   /** optional LLM (Bedrock / Anthropic). null = rules and regex only */
   llm?: import("@chimera-rx/coroner").LlmClient | null;
+  /** two-store mode (FR4): the registry behind a routed `db`. Absent in single-store mode */
+  stores?: import("./stores").StoreRegistry;
   /** voice provider for outreach */
   voice?: import("./voice").VoiceProvider;
 }

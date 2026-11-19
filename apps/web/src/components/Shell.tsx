@@ -44,6 +44,8 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
   const queue = useQuery({ queryKey: ["rxq"], queryFn: () => get<any[]>("/api/rx"), refetchInterval: 15000, enabled: user.role === "pharmacist" || user.role === "technician" });
   const badges = today.data?.badges ?? { receiving: 0, recalls: 0 };
   const flagged = (queue.data ?? []).filter((r) => r.status === "to_fill" && (r.review === "pending" || r.review === "on_hold")).length;
+  const me = useQuery({ queryKey: ["me"], queryFn: () => get<{ store?: { name: string } }>("/api/me"), staleTime: 60_000 });
+  const storeName = (me.data?.store?.name ?? "Elm Street Pharmacy · Store 7").replace(" Pharmacy", "");
   const [menu, setMenu] = useState(false);
   const logout = async () => { await post("/api/auth/logout"); qc.clear(); await qc.invalidateQueries({ queryKey: ["me"] }); };
   const [bg, fg] = AVATAR[user.role] ?? AVATAR.pharmacist!;
@@ -56,7 +58,7 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
       <aside className="side">
         <NavLink to="/" className="brand">
           {Icon.logo(32)}
-          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}><span style={{ fontWeight: 700, fontSize: 15 }}>Chimera Rx</span><span style={{ fontSize: 12, color: "var(--subtle)" }}>Elm Street · Store 7</span></span>
+          <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.25 }}><span style={{ fontWeight: 700, fontSize: 15 }}>Chimera Rx</span><span style={{ fontSize: 12, color: "var(--subtle)" }}>{storeName}</span></span>
         </NavLink>
         <nav className="nav" aria-label="Main">
           {clinical && <>
@@ -66,6 +68,7 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
             {item("/inventory", "Inventory", Icon.shelves())}
             {(user.role === "cashier" || user.role === "pharmacist") && item("/register", "Register", Icon.tag())}
             {(user.role === "technician" || user.role === "pharmacist") && item("/stock", "Stock help", Icon.shelves())}
+            {user.role === "pharmacist" && item("/transfers", "Transfers", Icon.truck())}
             {item("/fill", "Fill & pickup", Icon.rx(), flagged ? <span className="count amber" aria-label={`${flagged} need review`}>{flagged}</span> : null)}
             <span className="nav-label">Care</span>
             {user.role !== "cashier" && item("/patients", "Patients", NavIcon.patients)}
