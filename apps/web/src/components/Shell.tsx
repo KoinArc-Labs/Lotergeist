@@ -91,7 +91,7 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
           {clinical && <>
             <span className="nav-label">Demo tools</span>
             {item("/labels", "Test labels", Icon.tag())}
-            {item("/outbox", "Sandbox outbox", Icon.mail())}
+            {user.role !== "cashier" && item("/outbox", "Sandbox outbox", Icon.mail())}
           </>}
         </nav>
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10, position: "relative" }}>

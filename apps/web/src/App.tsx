@@ -29,7 +29,7 @@ const NOT_CASHIER: Role[] = ["pharmacist", "technician", "admin"];
 const STAFF: Role[] = ["pharmacist", "technician"];
 /** Same rules as the sidebar, so a typed or bookmarked address does not show a screen the API will refuse. */
 const ACCESS: Record<string, Role[]> = {
-  "/receiving": CLINICAL, "/inventory": CLINICAL, "/fill": CLINICAL, "/recalls": CLINICAL, "/labels": CLINICAL, "/outbox": CLINICAL,
+  "/receiving": CLINICAL, "/inventory": CLINICAL, "/fill": CLINICAL, "/recalls": CLINICAL, "/labels": CLINICAL, "/outbox": STAFF,
   "/register": ["cashier", "pharmacist"], "/stock": STAFF, "/transfers": ["pharmacist"], "/refills": STAFF, "/dscsa": STAFF,
   "/patients": NOT_CASHIER, "/agents": NOT_CASHIER, "/integrations": ["admin", "pharmacist"]
 };
