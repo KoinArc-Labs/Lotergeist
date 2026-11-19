@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
 import { get, type User } from "./lib/api";
-import { Shell } from "./components/Shell";
+import { mainStyle, PageHeader, Shell } from "./components/Shell";
+import { Footer } from "./components/kit";
 import { SignIn } from "./screens/SignIn";
 import { Today } from "./screens/Today";
 import { Receiving } from "./screens/Receiving";
@@ -20,6 +21,35 @@ import { Transfers } from "./screens/Transfers";
 import { Dscsa } from "./screens/Dscsa";
 import { Refills } from "./screens/Refills";
 
+
+type Role = User["role"];
+const ALL: Role[] = ["pharmacist", "technician", "cashier", "admin"];
+const CLINICAL: Role[] = ["pharmacist", "technician", "cashier"];
+const NOT_CASHIER: Role[] = ["pharmacist", "technician", "admin"];
+const STAFF: Role[] = ["pharmacist", "technician"];
+/** Same rules as the sidebar, so a typed or bookmarked address does not show a screen the API will refuse. */
+const ACCESS: Record<string, Role[]> = {
+  "/receiving": CLINICAL, "/inventory": CLINICAL, "/fill": CLINICAL, "/recalls": CLINICAL, "/labels": CLINICAL, "/outbox": CLINICAL,
+  "/register": ["cashier", "pharmacist"], "/stock": STAFF, "/transfers": ["pharmacist"], "/refills": STAFF, "/dscsa": STAFF,
+  "/patients": NOT_CASHIER, "/agents": NOT_CASHIER, "/integrations": ["admin", "pharmacist"]
+};
+
+function G({ user, path, children }: { user: User; path: string; children: React.ReactNode }) {
+  return (ACCESS[path] ?? ALL).includes(user.role) ? <>{children}</> : <NotForRole user={user} />;
+}
+
+function NotForRole({ user }: { user: User }) {
+  return (
+    <>
+      <PageHeader title="Not available for your role" sub={`Signed in as ${user.title}.`} />
+      <main style={mainStyle()}>
+        <p role="status" style={{ margin: 0, fontSize: 15 }}>This screen is not part of your role in the demo. <Link to={user.role === "admin" ? "/integrations" : "/"}>Go to your start page</Link>.</p>
+        <Footer />
+      </main>
+    </>
+  );
+}
+
 export function App() {
   const qc = useQueryClient();
   const me = useQuery({ queryKey: ["me"], queryFn: () => get<{ user: User; today: string }>("/api/me"), retry: false });
@@ -36,20 +66,20 @@ export function App() {
     <Shell user={user}>
       <Routes>
         <Route path="/" element={user.role === "admin" ? <Navigate to="/integrations" replace /> : <Today user={user} />} />
-        <Route path="/patients" element={<Patients user={user} />} />
-        <Route path="/integrations" element={<Integrations user={user} />} />
-        <Route path="/receiving" element={<Receiving user={user} />} />
-        <Route path="/inventory" element={<Inventory user={user} />} />
-        <Route path="/fill" element={<Fill user={user} />} />
-        <Route path="/recalls" element={<Recalls user={user} />} />
-        <Route path="/register" element={<Register user={user} />} />
-        <Route path="/transfers" element={<Transfers user={user} />} />
-        <Route path="/stock" element={<StockHelp user={user} />} />
-        <Route path="/agents" element={<AIAgents user={user} />} />
-        <Route path="/dscsa" element={<Dscsa user={user} />} />
-        <Route path="/refills" element={<Refills user={user} />} />
-        <Route path="/labels" element={<Labels />} />
-        <Route path="/outbox" element={<Outbox />} />
+        <Route path="/patients" element={<G user={user} path="/patients"><Patients user={user} /></G>} />
+        <Route path="/integrations" element={<G user={user} path="/integrations"><Integrations user={user} /></G>} />
+        <Route path="/receiving" element={<G user={user} path="/receiving"><Receiving user={user} /></G>} />
+        <Route path="/inventory" element={<G user={user} path="/inventory"><Inventory user={user} /></G>} />
+        <Route path="/fill" element={<G user={user} path="/fill"><Fill user={user} /></G>} />
+        <Route path="/recalls" element={<G user={user} path="/recalls"><Recalls user={user} /></G>} />
+        <Route path="/register" element={<G user={user} path="/register"><Register user={user} /></G>} />
+        <Route path="/transfers" element={<G user={user} path="/transfers"><Transfers user={user} /></G>} />
+        <Route path="/stock" element={<G user={user} path="/stock"><StockHelp user={user} /></G>} />
+        <Route path="/agents" element={<G user={user} path="/agents"><AIAgents user={user} /></G>} />
+        <Route path="/dscsa" element={<G user={user} path="/dscsa"><Dscsa user={user} /></G>} />
+        <Route path="/refills" element={<G user={user} path="/refills"><Refills user={user} /></G>} />
+        <Route path="/labels" element={<G user={user} path="/labels"><Labels /></G>} />
+        <Route path="/outbox" element={<G user={user} path="/outbox"><Outbox /></G>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

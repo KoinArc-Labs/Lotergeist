@@ -27,9 +27,9 @@ export function ThemeSwitch() {
   );
 }
 
-/** Required on every page (pharmacy-safety rule 8). */
+/** Required on every page (pharmacy-safety rule 10). */
 export const SafetyBanner = () => (
-  <div className="safety" role="note">Synthetic data only · Not for clinical use · Not HIPAA-compliant · A pharmacist approves every message</div>
+  <div className="safety" role="note">Demo environment · synthetic data only · not for clinical use · not HIPAA-compliant · a pharmacist approves every message</div>
 );
 
 const NavIcon = {
