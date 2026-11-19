@@ -52,7 +52,7 @@ No MCP server was used to build this repo. Chimera Rx *exposes* an MCP endpoint 
 
 ## Rehearsal without a camera
 
-`scripts/e2e/demo-e2e.mjs` swaps `getUserMedia` for a canvas that holds up generated DataMatrix labels and a printed text label, then drives the real UI: scan, put-away, a bad serial reported as a problem, label OCR, a fill, and the fax-OCR recall through to messages sent. 13 of 13 checks passed on the last run. **This is not a test of a physical webcam, lighting or print quality.**
+`scripts/e2e/demo-e2e.mjs` swaps `getUserMedia` for a canvas that holds up generated DataMatrix labels and a printed text label, then drives the real UI: scan, put-away, a bad serial reported as a problem, label OCR, a fill, and the fax-OCR recall through to messages sent, then the pilot screens. 40 of 40 checks passed on the last run (the MFA check runs only when the API starts with `MFA=1`). The run now also covers AI agents, refills, DSCSA, register, transfers and cashier restrictions. **This is not a test of a physical webcam, lighting or print quality.**
 
 ## AI-DLC record
 
