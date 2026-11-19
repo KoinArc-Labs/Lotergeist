@@ -23,6 +23,8 @@ export interface Config {
   dataset: "demo" | "large";
   /** require a 6-digit code (sandbox outbox) after the password (FR7); off unless MFA=1 */
   mfa: boolean;
+  /** sign a user out after this long without a request; 0 turns it off (SESSION_IDLE_MINUTES, default 30) */
+  sessionIdleMs: number;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env, o: Partial<Config> = {}): Config {
@@ -45,6 +47,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     today: env.TODAY || undefined,
     dataset: env.DATASET === "large" ? "large" : "demo",
     mfa: env.MFA === "1",
+    sessionIdleMs: Number(env.SESSION_IDLE_MINUTES ?? 30) * 60_000,
     ...o
   };
 }

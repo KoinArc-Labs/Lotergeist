@@ -16,7 +16,7 @@ import { decide, listMessages, proposeFix, respond } from "./prescriber";
 import { addWebhook, deliveries, WEBHOOK_EVENTS } from "./webhooks";
 import { ALL_SCOPES, apiActivity, createPartner, listPartners, rotateSecret, SCOPES, securityPosture, seedPartners, updatePartner, type Scope } from "./integrations";
 import { registerPartnerApi } from "./partner-api";
-import { patientProfile, refillSync, searchPatients } from "./patients";
+import { findPatientByPhone, patientProfile, refillSync, searchPatients } from "./patients";
 import { inboundCall, outreachResults, previewVoicemail, runOutreachAgent, startVoicemail, voicemailDraft } from "./outreach";
 import { fillQueue, printLabel, rxDetail, scanFill, sell, sendBack, verifyDispense } from "./fill";
 import { adjustLot, listLots, lotDetail, moveLot } from "./inventory";
@@ -28,6 +28,7 @@ import { gtinOf, ndc11Digits } from "./domain";
 import { ingestFaxInbox, pollOpenFda, todayView } from "./today";
 import { splitStore, withStore } from "./stores";
 import { otherStores, transferPackages } from "./crossstore";
+import { corsOriginsFrom, publicError, registerSecurity } from "./security";
 import { listScenarios, resetDemo, scenarioLabels, startScenario } from "./scenarios";
 
 declare module "fastify" { interface FastifyRequest { actor?: Actor; user?: SessionUser } }
@@ -41,15 +42,18 @@ const scanBody = z.object({
 const witnessBody = z.object({ email: z.string().email(), password: z.string().min(1).max(200) }).optional();
 
 export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false, bodyLimit: 2_000_000 });
+  const app = Fastify({ logger: false, bodyLimit: 2_000_000, trustProxy: process.env.TRUST_PROXY === "1" });
   await app.register(cookie);
-  await app.register(cors, { origin: true, credentials: true });
+  // Only the listed origins may call the API from a browser (CORS_ORIGINS); same-origin and non-browser callers need no CORS.
+  const corsOrigins = corsOriginsFrom();
+  await app.register(cors, { origin: (origin, cb) => cb(null, !origin || corsOrigins.includes(origin)), credentials: true });
+  registerSecurity(app, ctx, { corsOrigins });
 
+  // Error bodies are rebuilt from a fixed vocabulary (security.ts) so they never echo what the caller sent.
   app.setErrorHandler((err: any, _req, reply) => {
-    if (err instanceof ZodError) return reply.code(422).send({ error: "Some fields are missing or wrong.", issues: err.issues.map((i) => `${i.path.join(".")}: ${i.message}`) });
-    if (err instanceof HttpError) return reply.code(err.status).send({ error: err.message, code: err.code });
-    app.log.error(err);
-    return reply.code(err.statusCode ?? 500).send({ error: err.message ?? "Something went wrong." });
+    const e = publicError(err);
+    (reply as any).__errClass = err?.constructor?.name;
+    return reply.code(e.status).send(e.body);
   });
 
   // ---- two stores (FR4): the session cookie says which store's database every query in this request uses
@@ -272,7 +276,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     const b = z.object({ from: z.string().min(7).max(30), body: z.string().max(200) }).parse(req.body);
     if (!/^\s*stop\s*$/i.test(b.body)) return { handled: false };
     const digits = b.from.replace(/\D/g, "");
-    const p = ctx.db.get<{ id: string }>("SELECT id FROM patients WHERE replace(replace(replace(replace(phone,'(',''),')',''),'-',''),' ','') LIKE ?", `%${digits.slice(-10)}`);
+    const p = findPatientByPhone(ctx, digits.slice(-10));
     if (!p) return { handled: false };
     ctx.db.run("UPDATE patients SET sms_opt_out = 1 WHERE id = ?", p.id);
     audit(ctx, null, "sms.opt_out", "patient", p.id);

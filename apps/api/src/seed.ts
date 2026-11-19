@@ -138,7 +138,7 @@ export function seedDatabase(db: Db, cfg: Config, now = Date.now()) {
     RECALL_PATIENTS.forEach((p, i) => addPatient(p.id, p.name, p.ch, i + 1));
     // Call-only patients have a phone number but no text or email consent.
     addPatient("S-0612", "Daniel Brooks", "se", 42, { dob: "1968-03-14", allergies: "penicillin" });
-    db.run("UPDATE patients SET phone = '(555) 010-0142', email = 'd.brooks@example.com' WHERE id = 'S-0612'");
+    db.run("UPDATE patients SET phone = ?, email = ? WHERE id = 'S-0612'", "(555) 010-0142", "d.brooks@example.com");
     // Linda, James, Priya, Grace already exist above as recall patients; the queue reuses them.
     const pool: string[] = [];
     const firsts = ["Ana", "Ben", "Chloe", "Dev", "Eli", "Faye", "Gus", "Hana", "Ivan", "Jade", "Kai", "Lena", "Milo", "Nora", "Owen", "Pia", "Quinn", "Rae", "Sam", "Tess"];

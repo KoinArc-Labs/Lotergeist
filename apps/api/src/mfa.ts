@@ -54,6 +54,7 @@ export function demoCodeHint(ctx: Ctx, challenge: string): string | null {
   const row = ctx.db.get<{ user_id: string }>("SELECT user_id FROM mfa_codes WHERE challenge = ? AND used = 0", challenge);
   if (!row) return null;
   const u = ctx.db.get<{ email: string }>("SELECT email FROM users WHERE id = ?", row.user_id);
-  const m = ctx.db.get<{ body: string }>("SELECT body FROM outbox WHERE to_addr = ? AND subject = 'Your Chimera Rx sign-in code' ORDER BY id DESC LIMIT 1", u?.email ?? "");
+  // to_addr is encrypted at rest, so match it after the rows are opened.
+  const m = ctx.db.all<{ body: string; to_addr: string; subject: string }>("SELECT to_addr, subject, body FROM outbox WHERE subject = 'Your Chimera Rx sign-in code' ORDER BY id DESC LIMIT 50").find((o) => o.to_addr === (u?.email ?? ""));
   return /\b(\d{6})\b/.exec(m?.body ?? "")?.[1] ?? null;
 }

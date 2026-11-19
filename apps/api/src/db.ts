@@ -2,6 +2,8 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { cipherFor, ENVELOPE_PREFIX, type FieldCipher, type KeyProvider } from "./crypto";
+import { PROTECTED, rewriteProtected } from "./protect";
 
 // vite-node strips the "node:" prefix for sqlite, so load it through require.
 const require = createRequire(import.meta.url);
@@ -12,22 +14,54 @@ const clean = (p: unknown[]): Param[] => p.map((v) => (v === undefined ? null : 
 
 export class Db {
   readonly raw: DatabaseSync;
+  /** encrypts protected columns on write (see protect.ts) and opens every envelope on read */
+  readonly cipher: FieldCipher;
+  readonly keyProvider: KeyProvider;
   constructor(file: string) {
     if (file !== ":memory:") fs.mkdirSync(path.dirname(file), { recursive: true });
+    const k = cipherFor(file);
+    this.cipher = k.cipher;
+    this.keyProvider = k.provider;
     this.raw = new Sqlite(file);
     this.raw.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.migrate();
+    this.encryptAtRest();
+  }
+
+  private open<T>(row: Record<string, any>): T {
+    const out: Record<string, any> = { ...row };
+    for (const k in out) { const v = out[k]; if (typeof v === "string" && v.startsWith(ENVELOPE_PREFIX)) out[k] = this.cipher.openLenient(v); }
+    return out as T;
+  }
+  /** Values bound for protected columns (and string literals written to them) are sealed before they reach SQLite. */
+  private seal(sql: string, p: Param[]): { sql: string; params: Param[] } {
+    const r = rewriteProtected(sql, (v) => this.cipher.seal(v));
+    if (!r.idx.length) return { sql: r.sql, params: p };
+    const out = [...p];
+    for (const i of r.idx) { const v = out[i]; if (v !== null && v !== undefined && v !== "") out[i] = this.cipher.seal(String(v)); }
+    return { sql: r.sql, params: out };
   }
 
   all<T = Record<string, any>>(sql: string, ...p: unknown[]): T[] {
-    return this.raw.prepare(sql).all(...clean(p)).map((r) => ({ ...r })) as T[];
+    return this.raw.prepare(sql).all(...clean(p)).map((r) => this.open<T>(r));
   }
   get<T = Record<string, any>>(sql: string, ...p: unknown[]): T | undefined {
     const r = this.raw.prepare(sql).get(...clean(p));
-    return r ? ({ ...r } as T) : undefined;
+    return r ? this.open<T>(r) : undefined;
   }
   run(sql: string, ...p: unknown[]) {
-    return this.raw.prepare(sql).run(...clean(p));
+    const s = this.seal(sql, clean(p));
+    return this.raw.prepare(s.sql).run(...s.params);
+  }
+
+  /** Encrypt plaintext left by an older build, once, when a file database opens. */
+  private encryptAtRest() {
+    for (const [table, cols] of Object.entries(PROTECTED)) for (const col of cols) {
+      const rows = this.raw.prepare(`SELECT rowid AS rid, ${col} AS v FROM ${table} WHERE ${col} IS NOT NULL AND ${col} <> '' AND ${col} NOT LIKE '${ENVELOPE_PREFIX}%'`).all() as { rid: number; v: string }[];
+      if (!rows.length) continue;
+      const upd = this.raw.prepare(`UPDATE ${table} SET ${col} = ? WHERE rowid = ?`);
+      this.tx(() => { for (const r of rows) upd.run(this.cipher.seal(String(r.v)), r.rid); });
+    }
   }
   private depth = 0;
   /** Transactions nest: an inner failure rolls back to its savepoint, an outer failure rolls back everything. */
@@ -168,6 +202,7 @@ export class Db {
       const have = (this.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === col);
       if (!have) this.raw.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
     };
+    addColumn("sessions", "last_seen", "INTEGER");
     addColumn("audit", "prev_hash", "TEXT");
     addColumn("audit", "hash", "TEXT");
     addColumn("audit", "reason", "TEXT");

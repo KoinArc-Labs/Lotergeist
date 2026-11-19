@@ -29,6 +29,8 @@ export const FILLABLE_REVIEW = new Set(["clear", "approved"]);
 export function rxDetail(ctx: Ctx, actor: Actor, rx: string) {
   const r = ctx.db.get<any>("SELECT r.*, p.name AS pname, p.dob, p.phone, p.email, p.preferred, p.sms_consent, p.email_consent, p.allergies, pr.name AS product, pr.ndc10 FROM prescriptions r JOIN patients p ON p.id = r.patient_id LEFT JOIN products pr ON pr.ndc11 = r.ndc11 WHERE r.rx = ?", rx);
   if (!r) throw new HttpError(404, "Unknown prescription.");
+  // Opening an order shows the patient's name, date of birth and allergies: log the view by ids only (no PHI in the audit).
+  audit(ctx, actor, "phi.view", "prescription", rx, undefined, { patientId: r.patient_id });
   const full = actor.role !== "cashier"; // cashiers see enough to hand over the medicine, not the whole profile
   const d = ctx.db.get<any>(
     `SELECT d.*, k.serial, k.expiry, k.location, l.lot FROM dispenses d LEFT JOIN packages k ON k.id = d.package_id LEFT JOIN lots l ON l.id = k.lot_id

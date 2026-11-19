@@ -9,6 +9,8 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "fax": "node scripts/make-fax.mjs",
+    "keys:status": "tsx scripts/keys.ts status",
+    "keys:rotate": "tsx scripts/keys.ts rotate",
     "evidence:accuracy": "tsx scripts/evidence-accuracy.ts",
     "evidence:timing": "tsx scripts/evidence-timing.ts"
   },
