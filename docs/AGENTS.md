@@ -1,6 +1,6 @@
 # AI agents
 
-Seven agents, one rule: **rules decide, the model explains, a gate checks the model, a pharmacist decides.** Output is labelled "AI advisory, a pharmacist decides". Code is in `apps/api/src/agents/`; the screen is **AI agents** in the sidebar.
+Eight agents, one rule: **rules decide, the model explains, a gate checks the model, a pharmacist decides.** Output is labelled "AI advisory, a pharmacist decides". Code is in `apps/api/src/agents/`; the screen is **AI agents** in the sidebar.
 
 Every agent has three parts:
 

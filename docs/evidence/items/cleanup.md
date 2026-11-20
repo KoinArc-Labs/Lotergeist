@@ -29,7 +29,7 @@ Scanned the tree without `node_modules`, `.git`, `aidlc/`, built output and `pnp
 - SSN-shaped strings: only a test fixture inside `node_modules`.
 - Phones outside `(555) 010-01xx`: all in the reserved fictional `555-010` block (for example `(555) 010-2200` for the demo pharmacy, `555-010-0142` in an SMS test). One real manufacturer address in `fixtures/recalls/real-2025.json` is public openFDA data. No action.
 - Emails not at `example.com`: staff and store sign-in addresses use the `.example` top-level domain (`elmstreetrx.example`, `birchavenuerx.example`) in `apps/api/src/seed.ts`, `seed-store2.ts`, `app.ts`, tests, `README.md` and `docs/DEMO.md`. I did not change them: that alters sign-in behaviour and touches files other workers edit. The brief says `example.com`; the owner should decide.
-- Company names: no `KoinArc` in tracked files outside `aidlc/`. Not edited, reported:
+- Company names: no `[a forbidden company name]` in tracked files outside `aidlc/`. Not edited, reported:
   - `aidlc/spaces/default/memory/project.md` line 63 contains the name inside the rule that forbids it. The same text is in ignored copies, `aidlc/active-memory/project.md` and `.kiro/steering/aidlc-active-memory.md` (gitignored, so not committed).
   - `aidlc/spaces/default/intents/261116-judge-ready-pilot/audit/mac-borad-1418-local-fc0935229a00.md` repeats the git name `pjborad-dcli`.
 - Git metadata: the commit author name `pjborad-dcli` and an employer-domain email are in every commit. I cannot change that without rewriting history. The owner should decide before the repo goes public.
