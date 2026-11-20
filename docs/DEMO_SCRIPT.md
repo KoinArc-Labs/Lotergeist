@@ -37,4 +37,4 @@ This is the word-for-word narration for the submission video. It is about 350 wo
 
 ## Honest limits to keep in the voiceover or captions
 
-Synthetic data only. Sandbox messaging. Not for clinical use. Live Bedrock was not exercised on the build machine, so show the provider switch with `mock` unless you have verified your own credentials first.
+Synthetic data only. Sandbox messaging. Not for clinical use. Live Bedrock was checked once on 2026-11-20. Before recording, run `aws sso login`, press Test connection, and fall back to `mock` if it fails.

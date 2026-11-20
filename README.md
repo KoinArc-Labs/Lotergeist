@@ -222,7 +222,7 @@ Provider is chosen with `LLM_PROVIDER` at start-up (empty means `bedrock`). A ph
 
 Examples: Ollama is `OPENAI_BASE_URL=http://localhost:11434/v1`, `OPENAI_MODEL=<a model you pulled>`. Adding a provider is about 20 lines ([docs/AGENTS.md](docs/AGENTS.md)).
 
-**Live Bedrock was not exercised on the build machine.** The Bedrock, Anthropic and OpenAI-compatible clients are tested with stub providers and a deterministic mock; no live model call was made.
+**Live Bedrock was checked once** on 2026-11-20 with the Converse API (`us.anthropic.claude-sonnet-5`, `us-east-1`): Test connection answered in about 3 seconds, and the Coroner read two lots from a notice with its LLM pass on. The Anthropic and OpenAI-compatible clients are tested only with stubs and the mock. Model IDs are retired over time, so if Test connection fails, run `aws bedrock list-inference-profiles` and set `BEDROCK_MODEL_ID`.
 
 ## Security and privacy
 

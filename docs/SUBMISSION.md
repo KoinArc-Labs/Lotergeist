@@ -65,7 +65,7 @@ The honest account, including gaps, is in `docs/KIRO_USAGE.md`.
 
 ### What is next
 
-- A live Bedrock run and a latency and cost check.
+- A latency and cost check on live Bedrock (one live run has been done).
 - A real KMS key provider and TLS in front of the API.
 - A licensed drug-interaction source instead of the curated rule table.
 - A hosted sandbox and a physical-webcam test with printed cartons.

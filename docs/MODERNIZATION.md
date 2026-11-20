@@ -53,7 +53,7 @@ Rule for every agent: rules decide, the model explains, a gate checks the model,
 
 | Idea | Why | What it needs |
 | --- | --- | --- |
-| Live Bedrock check, with latency and cost | The default provider has only been tested with stubs and a mock | AWS credentials and a measured run |
+| Live Bedrock check, with latency and cost | The default provider has had one live check (Test connection and one Coroner run), but no latency or cost measurement | AWS credentials and a measured run |
 | A licensed drug-interaction and dosing source for the Guardian | The demo tables are synthetic | A licence and a clinical review |
 | Prescriber-reply reading (accept a faxed change) | Closes the change-request loop | OCR of replies and a gate like the Coroner's |
 | Wholesaler and PMS connectors | Replaces seeded data | Real partner access; not a sandbox job |

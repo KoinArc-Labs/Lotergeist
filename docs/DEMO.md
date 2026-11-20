@@ -72,7 +72,7 @@ Do the 3-minute path, then add these in order. Each scenario resets the data, so
 | Blank page after rebuilding | Old tab holding stale assets | Hard-reload. The API reads the web build from disk on every request, so no restart is needed. |
 | Sign-in or any POST says "That origin is not allowed." | The web app runs on a port not in the CORS list | Set `CORS_ORIGINS=http://localhost:<web port>` and restart the API. |
 | AI agent shows "rules only" | Provider is `none`, or the model call failed and the provider is paused for 60 s | Choose `mock` on the AI agents screen, or fix the credentials and press **Test connection**. |
-| Bedrock test fails | No AWS credentials, wrong region or no model access | Set `AWS_REGION`, `AWS_PROFILE`, `BEDROCK_MODEL_ID`, or switch to `mock`. Live Bedrock was not exercised on the build machine. |
+| Bedrock test fails | No AWS credentials, wrong region or no model access | Set `AWS_REGION`, `AWS_PROFILE`, `BEDROCK_MODEL_ID`, or switch to `mock`. Live Bedrock was checked once on 2026-11-20; model IDs are retired over time, so list current ones with `aws bedrock list-inference-profiles`. |
 | Camera does not start | Not on `localhost` or HTTPS, or permission denied | Paste a code from Test labels into the scan box, or use a USB scanner. |
 | OCR slow the first time | The first read loads a 4 MB model | Read once before recording. If `apps/web/public/ocr` is empty, run `pnpm setup` (needs network). |
 | openFDA unreachable | No network | The app falls back to the recall fixtures and says so. |
