@@ -10,15 +10,15 @@ Chimera Rx
 
 ### Tagline
 
-A pharmacy lot ledger that links each lot to the patients who took it home, so a recall becomes a list instead of a guess.
+A modern, agent-assisted pharmacy system, stitched together from parts that were never meant to fit: one ledger that knows the lot, the patient and the history, with agents that watch it and a pharmacist who decides. A recall is the proof.
 
 ### Inspiration
 
-Wholesalers track drugs by lot. Pharmacy dispensing systems track drugs by patient. Almost nothing records which lot each patient received, even though the lot is printed in the 2D barcode on every package. When the FDA recalls a lot, a pharmacy either warns everyone who ever got that drug or warns no one. We wanted to close that gap with parts that already exist and were never meant to fit together.
+A pharmacy runs on yesterday's software. Wholesalers track drugs by lot, dispensing systems track them by patient, and the two never meet. Recalls and prescriber changes travel by fax and phone, cold-chain and count checks sit on paper, and alerts get overridden (published studies put override rates at [more than half](https://pubmed.ncbi.nlm.nih.gov/24166725/)). The lot is printed in the 2D barcode on every package and nobody records it at the counter, so a recall means warning everyone or no one. Package-level traceability is also becoming the rule under the DSCSA (the FDA gave small dispensers [an exemption to November 27, 2027](https://www.fda.gov/drugs/drug-supply-chain-security-act-dscsa/exemptions-under-drug-supply-chain-security-act)). We wanted to modernize the whole counter with parts that already exist, a Frankenstein of scanners, OCR, openFDA, EPCIS, FHIR, MCP and language models stitched into one ledger. The recall is the sharpest proof, not the whole product. The long case is in [MODERNIZATION.md](MODERNIZATION.md).
 
 ### What it does
 
-Chimera Rx captures lot and serial when a package arrives and again when it is handed to a patient, by GS1 DataMatrix scan (camera or USB scanner) or by OCR for labels with no barcode. When a recall arrives (a typed FDA number, a faxed notice read by OCR in the browser, or a nightly openFDA poll), it finds the units on the shelf, quarantines them, finds the patients who took one home, and drafts the messages. A pharmacist approves every step, and every message goes to a sandbox outbox.
+Chimera Rx is a pharmacy system built on one lot ledger. It captures lot and serial when a package arrives and again when it is handed to a patient, by GS1 DataMatrix scan (camera or USB scanner) or by OCR for labels with no barcode. When a recall arrives (a typed FDA number, a faxed notice read by OCR in the browser, or a nightly openFDA poll), it finds the units on the shelf, quarantines them, finds the patients who took one home, and drafts the messages. A pharmacist approves every step, and every message goes to a sandbox outbox.
 
 Around that core, the pilot covers the rest of a pharmacy's day:
 
@@ -28,7 +28,7 @@ Around that core, the pilot covers the rest of a pharmacy's day:
 - Recall-aware refills with adherence (PDC), medication sync and a recall hold.
 - A front-store register that also sells one patient's verified prescriptions, and blocks recalled lots.
 - Two stores with separate databases, transfers that keep lot and serial, and recalls mirrored across stores.
-- Seven AI agents with Amazon Bedrock as the default provider and swappable Anthropic, OpenAI-compatible (OpenAI, Azure, Ollama), mock and rules-only modes. A judge can switch provider and paste a key on the AI agents screen.
+- Eight AI agents, four of which can run in the background once a pharmacist switches them on. The Rx Guardian checks each new order against the patient's history and raises suggestions with evidence that a pharmacist accepts or dismisses. Amazon Bedrock is the default provider and swappable Anthropic, OpenAI-compatible (OpenAI, Azure, Ollama), mock and rules-only modes. A judge can switch provider and paste a key on the AI agents screen.
 - Partner surfaces: REST, MCP and FHIR R4 behind OAuth 2.0 scopes, plus HMAC-signed webhooks.
 - Patient fields encrypted at rest with AES-256-GCM, a key ring with rotation, hardened API headers, rate limits, roles, optional MFA and a hash-chained audit log.
 
@@ -53,7 +53,7 @@ The honest account, including gaps, is in `docs/KIRO_USAGE.md`.
 ### Accomplishments
 
 - A recall goes from a faxed notice to a patient list and approved messages, end to end, in one flow.
-- 336 unit, API and property tests pass, and 40 end-to-end browser checks pass against the real UI.
+- 364 unit, API and property tests pass, and the end-to-end browser run passes against the real UI (49 passed, 1 skipped; see `docs/evidence/items/bgagents.md`).
 - Every safety rule has an enforcing file and a proving test.
 - An agent platform where a lying model cannot remove a rule hit, add a lot, or put a name into a voicemail.
 
@@ -85,16 +85,16 @@ Follow the 3-minute table in [DEMO.md](DEMO.md). Record at 1080p, browser at 100
 
 | Time | Shot | Voice-over |
 | --- | --- | --- |
-| 0:00 | Sign-in page | The problem in one sentence: the pharmacy knows who got the drug, not which lot. |
+| 0:00 | Sign-in page | The pharmacy runs on yesterday's software. It knows who got the drug, not which lot. |
 | 0:15 | Today with the recall banner | 197 units on the shelf, 17 patients. |
 | 0:30 | Recalls: read the fax with OCR | The browser reads the fax. openFDA confirms. The Coroner keeps only lots printed on the notice. |
 | 0:55 | Recalls: impact, then Use AI draft | Units quarantined, patients listed by consent. The AI draft is labelled advisory. |
 | 1:15 | Attest, send, then the sandbox outbox | Nothing leaves the laptop. Text carries the pharmacy phone and STOP. |
-| 1:40 | AI agents: run two agents, show a dropped item, show the provider switch | Rules decide, the model explains, a gate checks the model, a pharmacist decides. Bedrock by default; any provider can be swapped in. |
+| 1:40 | AI agents: the background row and the Rx Guardian suggestions, the provider switch | Agents work while you work: rules decide, the model explains, a gate checks the model, a pharmacist decides. Bedrock by default; any provider can be swapped in. |
 | 2:05 | DSCSA & trace: download EPCIS, sandbox verifier | Package-level events in a standard format. Sandbox, not a filing. |
 | 2:25 | Refills, then Transfers | Recalled-lot patients are held out of refills. Two stores keep lot and serial. |
 | 2:45 | `.kiro/` folder and `docs/SAFETY.md` table | Steering, specs, hooks, and eleven rules each mapped to a test. |
-| 2:58 | End card | Repo URL, "synthetic data only". |
+| 2:58 | End card | "A modern pharmacy system. The recall is the proof." Repo URL, "synthetic data only". |
 
 ## Owner checklist
 

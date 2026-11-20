@@ -1,18 +1,69 @@
 # Chimera Rx
 
-Chimera Rx is a pharmacy lot ledger that records which lot and serial each patient took home, so a recall turns into a list of shelf units and patients in about a minute instead of a phone-everyone exercise.
+**A modern, agent-assisted pharmacy system. One ledger holds the lot, the patient and the prescription history, agents watch it in the background, and a pharmacist decides. A recall is the sharpest proof.**
 
 **Kiroween 2026, Frankenstein category. Built with Kiro.** Demo environment: synthetic data only, not for clinical use, not HIPAA-compliant, no compliance or certification claim of any kind. See [docs/SAFETY.md](docs/SAFETY.md).
 
 ![Sign-in page with the demo accounts and the demo notice](docs/img/sign-in.jpg)
 
-## The gap
+## The pharmacy runs on yesterday's software
 
-Wholesalers track drugs by lot. Dispensing systems track drugs by patient. Nobody links the two: the lot number is printed in the 2D barcode on every package, but it is not captured at the counter. When a lot is recalled, a pharmacy warns everyone who ever got that drug, or no one.
+A dispensing system answers one question well: what did this patient get? Most of what a pharmacy has to do around that question still runs on older tools.
 
-Chimera Rx captures lot and serial at receiving and again at fill (GS1 DataMatrix by camera or USB scanner, or OCR for labels without a barcode). A recall then resolves to the units on the shelf, which are quarantined, and the patients who took one home, who get drafted messages that a pharmacist approves.
+- **Old core, thin integration.** Pharmacy management systems have been evolving for [about four decades](https://intuitionlabs.ai/articles/pharmacy-management-systems-guide), and buyer guides for independent pharmacies still list [integration between dispensing, point of sale and mobile communications](https://datascanpharmacy.com/what-is-the-best-retail-pharmacy-software-for-independent-pharmacies-in-2026/) as what separates modern software from outdated tools. Several long-running products have also been [consolidated under one corporate owner](https://datascanpharmacy.com/is-your-pharmacy-software-shutting-down-or-being-sunset/). We found no sourced figure for the average age of an installed system, so we give none.
+- **Lot data and patient data live in different places.** Wholesalers and manufacturers track a package by lot and serial. The dispensing record tracks the patient and the drug, and usually not which lot went home. That is the premise of this project, not a measured statistic; the design is in [docs/DSCSA.md](docs/DSCSA.md).
+- **Recalls reach patients by hand.** An FDA and UCSF research team calls individual patient notification of drug recalls [a problem with complex challenges](https://www.medrxiv.org/content/10.1101/2024.09.18.24312141v1.full.pdf) (preprint, not peer reviewed): consumer-level recalls usually depend on each patient acting. Prescriber changes still travel by fax and phone in pharmacy programs; one published pharmacy-benefit program [sent 8,075 fax alerts](https://pubmed.ncbi.nlm.nih.gov/24761821) to prescribers (an older study, cited for the channel, not for today's volume).
+- **Cold chain and counts are paper or a spreadsheet.** A CDC simulation of vaccine storage found that reading a thermometer twice a day, without min/max, [caught only 4.8 to 6.4 percent of temperature excursions](https://stacks.cdc.gov/view/cdc/119983/cdc_119983_DS1.pdf). Vaccine units are not pharmacy shelves, but the point carries: a spot reading misses what happened between readings.
+- **Alerts that get overridden.** In a study of community pharmacies, [289 of 510 relevant interaction alerts](https://pubmed.ncbi.nlm.nih.gov/17381663/) were overridden with no action. In a large outpatient study, [52.6 percent of 157,483 medication alerts](https://pubmed.ncbi.nlm.nih.gov/24166725/) were overridden, and a 2023 allergy-alert study reported a [98.9 percent override rate](https://pubmed.ncbi.nlm.nih.gov/41613422/). When most alerts say nothing new, the one that matters gets the same click.
+- **Tired staff, thin margins.** A survey of 412 community pharmacists reported that [74.9 percent had burnout in at least one domain](https://www.pharmacytimes.com/view/pharmacist-burnout-poses-challenges-to-patient-access). The 2024 NCPA Digest describes independent pharmacies [closing at more than one a day](https://www.drugtopics.com/view/2024-ncpa-digest-highlights-challenges-in-independent-pharmacy-ncpa-2024).
+- **Package-level traceability is now the rule.** The FDA says the DSCSA enhanced distribution security requirements are meant to enable [interoperable, electronic tracing at the package level](https://www.fda.gov/media/194424/download). The one-year stabilization period ran from November 27, 2023 to [November 27, 2024](https://www.fda.gov/media/179256/download). For small dispensers (25 or fewer full-time pharmacists and technicians counted on November 27, 2026) the FDA [extended an exemption to November 27, 2027](https://www.fda.gov/drugs/drug-supply-chain-security-act-dscsa/exemptions-under-drug-supply-chain-security-act), and other dispensers who cannot comply may request a waiver. Check your own status with the FDA; this README is not advice.
 
-![Today screen after a Class I recall: refills tile](docs/img/today.jpg)
+Sources were checked on 2026-11-20. The full list, and what we left out for lack of a source, is in [docs/evidence/items/market.md](docs/evidence/items/market.md).
+
+## One ledger, agents on top
+
+```mermaid
+flowchart LR
+  subgraph Before["Before: separate silos"]
+    direction TB
+    W["Wholesaler records<br/>lot and serial"]
+    D["Dispensing system<br/>patient and drug"]
+    P["Paper or spreadsheet<br/>cold chain and counts"]
+    F["Fax and phone<br/>recalls, prescriber changes"]
+    A["Alert popups<br/>override and move on"]
+  end
+  subgraph After["After: Chimera Rx"]
+    direction TB
+    L[("One lot ledger<br/>lot, serial, patient, history")]
+    G["Agents in the background<br/>Rx Guardian and others"]
+    H["Pharmacist decides<br/>accept, dismiss, send"]
+    X["Sandbox outbox, EPCIS,<br/>REST, MCP and FHIR"]
+    L --> G --> H
+    L --> X
+  end
+  Before --> After
+```
+
+The recall is the sharpest proof because it needs every silo at once: the lot (receiving), the patient (fill), the history (refills), the contact (consent) and a decision (pharmacist).
+
+## Gaps we close
+
+| Old way | Chimera Rx way | Where in the app |
+| --- | --- | --- |
+| A recall means warning everyone or no one | A recall resolves to the units on the shelf (quarantined) and the patients who took one home; messages are drafted, a pharmacist attests and sends | Recalls; `apps/api/src/recall.ts` |
+| The lot is never captured at the counter | Lot and serial captured at receiving and at fill by GS1 DataMatrix scan, or OCR for labels without a barcode; four receiving checks (invoice, transaction information, expiry, recall) | Receiving, Fill & pickup; `packages/gs1`, `apps/web/src/lib/scanner.ts` |
+| Alerts come one at a time and get overridden | Rx Watcher rules plus the Rx Guardian: a patient-history check that raises suggestions with the evidence beside the order | Fill & pickup, Today, AI agents; `apps/api/src/rxwatcher.ts`, `agents/guardian.ts` |
+| Refills ignore recalls and adherence | Refill worklist with PDC adherence, medication sync, recall hold for patients whose last fill came from a recalled lot | Refills; [docs/REFILLS.md](docs/REFILLS.md) |
+| Traceability data is hard to exchange | EPCIS 2.0 export and dry-run import, sandbox verification requests, suspect-product cases, recall trace export. A sandbox, not a filing | DSCSA & trace; [docs/DSCSA.md](docs/DSCSA.md), `packages/epcis` |
+| Cold chain and counts on paper | Temperature check at receiving against the shipper's log (simulated data) and witnessed Schedule II receiving and count changes. No in-store sensor feed | Receiving, Inventory; [docs/SAFETY.md](docs/SAFETY.md) |
+| Front store and pharmacy are separate | One register for over-the-counter items and one patient's verified prescriptions; recalled lots are blocked. "Paid" is a label, no payment is processed | Register; `apps/api/src/register.ts` |
+| Each store is an island | Two stores with separate databases, transfers that keep lot and serial, recalls mirrored to the other store | Transfers; `apps/api/src/crossstore.ts` |
+| Outreach is a list and a phone | Consent-checked outreach, minimum-necessary text with the pharmacy phone and STOP, sandbox outbox only | Recalls, Refills; `apps/api/src/outreach.ts`, `notify.ts` |
+| Other systems cannot ask the ledger | REST, MCP (JSON-RPC) and FHIR R4 behind OAuth 2.0 client credentials and per-partner scopes; HMAC-signed webhooks | Integrations; `apps/api/src/partner-api.ts`, `webhooks.ts` |
+| Logs can be edited | Append-only, hash-chained audit log with a verify route | `GET /api/audit/verify`; `apps/api/src/core.ts` |
+| Stock decisions are guesswork | Reorder, expiry-risk and shortage suggestions from rules, with the numbers shown | Stock help; `apps/api/src/stockhelp.ts` |
+
+Long version, by role, with a 90-day pilot plan: [docs/MODERNIZATION.md](docs/MODERNIZATION.md).
 
 ## Try it in 60 seconds
 
@@ -54,27 +105,42 @@ The "Badge tap / SSO" button is a demo stand-in that signs in the Store 7 pharma
 
 Sign in as the pharmacist and open **Demo guide** in the sidebar for the scenarios (each one resets the data and shows a short brief).
 
-1. **Class I recall with patients to reach.** Recalls, look up `D-0611-2026`: the lot is confirmed, every on-shelf pen moves to quarantine, the impact list names the patients. Draft messages (try **Use AI draft**), tick the attestation, send. They land in the sandbox outbox.
-2. **Recall-aware refill.** Open Refills, then look up `D-0611-2026` in Recalls. The patient's refill row turns red and links to the recall.
-3. **AI agents.** Open AI agents and press **Run with sample input** on any agent. Output is labelled "AI advisory, a pharmacist decides".
+1. **Agent catches it.** Start the scenario and stay on Today. A new insulin order arrives for a patient with late fills, an active semaglutide pen and a last fill from a recalled lot. Within about a minute the Rx Guardian raises suggestions with the evidence. Accept one and the order goes on hold.
+2. **Class I recall with patients to reach.** Recalls, look up `D-0611-2026`: the lot is confirmed, every on-shelf pen moves to quarantine, the impact list names the patients. Draft messages (try **Use AI draft**), tick the attestation, send. They land in the sandbox outbox.
+3. **Recall-aware refill.** Open Refills, then look up `D-0611-2026` in Recalls. The patient's refill row turns red and links to the recall.
 
-## What it does
+![Today screen after a Class I recall: refills tile](docs/img/today.jpg)
 
-| Market gap | Feature | Where to find it |
-| --- | --- | --- |
-| A recall does not say who got the bad lot | Recall to shelf units and patients, quarantine, consent-checked outreach, PDF audit report | Recalls; `apps/api/src/recall.ts` |
-| The lot is never captured at the counter | Lot and serial captured at receiving and at fill by GS1 DataMatrix scan, or OCR for labels with no barcode; the four receiving checks (invoice, transaction information, expiry, recall) | Receiving, Fill & pickup; `packages/gs1`, `apps/web/src/lib/scanner.ts`, `ocr.ts` |
-| Order errors reach the patient | Rx Watcher: deterministic rules first, an LLM may only explain or add a lower-confidence note | Fill & pickup; `apps/api/src/rxwatcher.ts` |
-| Traceability data is hard to exchange | EPCIS 2.0 export and dry-run import, sandbox verification requests, suspect-product cases, recall trace export. A sandbox, not a filing | DSCSA & trace; [docs/DSCSA.md](docs/DSCSA.md), `packages/epcis` |
-| Refills ignore recalls and adherence | Refill worklist with PDC adherence, medication sync, recall hold on recalled-lot patients, Refill Outreach agent | Refills; [docs/REFILLS.md](docs/REFILLS.md) |
-| Front-store and pharmacy are separate | Register: over-the-counter items and one patient's verified prescriptions in one sale. "Paid" is a label; no payment is processed | Register; `apps/api/src/register.ts` |
-| Chains share stock, small stores cannot | Two stores with separate databases, transfers that keep lot and serial, recalls mirrored to the other store | Transfers, store picker on sign-in; `apps/api/src/crossstore.ts`, `stores.ts` |
-| AI is a black box | Seven gated agents, Bedrock by default, swappable provider, every run stored with prompt and dropped output | AI agents; [docs/AGENTS.md](docs/AGENTS.md) |
-| Other systems cannot ask the ledger | Partner REST, MCP (JSON-RPC) and FHIR R4 behind OAuth 2.0 client credentials and per-partner scopes; HMAC-signed webhooks | Integrations; `apps/api/src/partner-api.ts`, `webhooks.ts` |
-| Logs can be edited | Append-only, hash-chained audit log with a verify route | `GET /api/audit/verify`; `apps/api/src/core.ts` |
-| Stock decisions are guesswork | Reorder, expiry-risk and shortage suggestions from rules with the numbers shown | Stock help; `apps/api/src/stockhelp.ts` |
+## Agents that work while you work
 
-Other parts stitched in: openFDA (live, with fixtures as fallback), the Coroner lot extractor (regex plus optional LLM, keeps a lot only if it is printed in the source), recall voicemail with ElevenLabs, OpenAI, macOS or browser voice (nothing is dialled), and a sandbox NCPDP SCRIPT-shaped `RxChangeRequest` to the prescriber.
+Eight agents share one rule: **rules decide, the model explains, a gate checks the model, a pharmacist decides.** With no model, or when a call fails, every agent still returns its rules-only result.
+
+Four of them can run on their own once a pharmacist or admin switches them on (AI agents screen): the Rx Guardian (checks every new or changed order within a minute), Night Watch, the Stock and Shortage Advisor and Refill Outreach (daily). They never change an order, send a message or confirm a lot. Each shows when it last ran and when it runs next. `AGENTS_BACKGROUND=0` turns the scheduler off.
+
+The Rx Guardian reads an order against the patient's whole history: fills, lots, allergy class codes, active medicines, adherence, age band and earlier suggestions. Its interaction and age-band tables are small synthetic demo tables, not clinical content.
+
+**Before and after, one alert.** The data below is synthetic, and the layout is illustrative.
+
+| Old way | With the Rx Guardian |
+| --- | --- |
+| A popup at the screen: "Possible interaction. Override?" | A suggestion on the order with the evidence next to it: "A fill came from recalled lot GX4471C" (last insulin fill, with its date and lot), "Gaps in insulin fills", and a demo-table pair with the active semaglutide fill. |
+| Override or cancel. No record of why. | Accept (the order goes on hold with the reason), dismiss (a reason is required), or send a prescriber change request. Every decision is in the audit log. |
+| The history lives in other windows. | The history facts are cited in the suggestion, and a note that cites a fact that does not exist is dropped by the gate. |
+
+The model is Amazon Bedrock by default, and you can bring your own: Anthropic, an OpenAI-compatible endpoint (OpenAI, Azure, Ollama, LM Studio, vLLM), an offline mock, or rules only. Details and the provider table are in [AI agents](#ai-agents) below and in [docs/AGENTS.md](docs/AGENTS.md).
+
+![AI agents screen after running an agent](docs/img/agents.jpg)
+
+## Safe by design
+
+A pilot threat model, not a compliance claim. Full text: [docs/SECURITY.md](docs/SECURITY.md), rules mapped to tests: [docs/SAFETY.md](docs/SAFETY.md).
+
+- **Synthetic data only.** A hook and a CI step block PHI-shaped content. No real patient data, ever.
+- **Encrypted at rest.** Patient names, dates of birth, phones, emails, allergies, conditions, directions, message bodies, agent runs and suggestions are sealed with AES-256-GCM; the list is in `apps/api/src/protect.ts`.
+- **Roles on the server.** Pharmacist, technician, cashier and admin are checked on every route. Partners get scoped tokens.
+- **Audit.** A hash-chained log of every decision, with a verify route.
+- **Sandbox messaging.** SMS, email and voice go to an outbox; nothing is dialled or sent. The prescriber loop and the DSCSA verifier are stand-ins.
+- **No compliance claims.** No HIPAA, DSCSA, certification or clinical-validity claim. This is not a medical device.
 
 ## Architecture
 
@@ -127,13 +193,11 @@ flowchart LR
   DSC --> EPC
 ```
 
-Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-![AI agents screen after running an agent](docs/img/agents.jpg)
+Other parts stitched in: openFDA (live, with fixtures as fallback), the Coroner lot extractor (regex plus optional LLM, keeps a lot only if it is printed in the source), recall voicemail with ElevenLabs, OpenAI, macOS or browser voice (nothing is dialled), and a sandbox NCPDP SCRIPT-shaped `RxChangeRequest` to the prescriber. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## AI agents
 
-Rule: rules decide, the model explains, a gate checks the model, a pharmacist decides. With no model, or when a call fails, every agent still returns its rules-only result.
+Rule: rules decide, the model explains, a gate checks the model, a pharmacist decides. With no model, or when a call fails, every agent still returns its rules-only result. Background mode and the Rx Guardian are described [above](#agents-that-work-while-you-work).
 
 | Agent | What it does |
 | --- | --- |
@@ -144,6 +208,7 @@ Rule: rules decide, the model explains, a gate checks the model, a pharmacist de
 | Night Watch | Daily digest of recalls, shortages, expiring lots |
 | Stock and Shortage Advisor | One sentence per suggestion, numbers checked |
 | Pharmacist Copilot | Answers a question with up to three read-only tools |
+| Rx Guardian | Checks a new or changed order against the patient's history and raises suggestions a pharmacist accepts or dismisses; can run in the background |
 
 Provider is chosen with `LLM_PROVIDER` at start-up (empty means `bedrock`). A pharmacist or admin can also switch provider, model and key on the AI agents screen and press **Test connection**; a pasted key stays in server memory and is never stored, logged or returned.
 
@@ -186,14 +251,14 @@ Eleven rules in [`.kiro/steering/pharmacy-safety.md`](.kiro/steering/pharmacy-sa
 
 ## Testing
 
-Measured on 2026-11-19 on the machine that built this repo:
+Measured on 2026-11-20 on the machine that built this repo:
 
 | Command | Result |
 | --- | --- |
-| `pnpm test` | 19 files, 336 tests passed |
+| `pnpm test` | 20 files, 364 tests passed |
 | `pnpm typecheck` | clean in all workspaces |
 | `pnpm build:web` | builds |
-| `pnpm e2e` | 40 of 40 checks passed against a fresh data directory; the MFA check is skipped unless the API runs with `MFA=1` |
+| `pnpm e2e` | 49 passed and 1 skipped against a fresh data directory (the MFA check is skipped unless the API runs with `MFA=1`); run by the Rx Guardian build item, see [docs/evidence/items/bgagents.md](docs/evidence/items/bgagents.md) |
 
 Property tests (fast-check, in 9 test files) check that on-hand stock always equals received minus dispensed, returned and adjusted, that no serial is dispensed twice, that the Coroner never emits a lot that is not in the source even when a stub model lies, that GS1 parsing round-trips, and that EPCIS events stay valid. Hostile-provider tests feed lying models to every agent and check the gates.
 
@@ -279,7 +344,7 @@ Steering files hold the safety rules and the stack, specs cover the Coroner and 
 - No real patient data, ever. All names, ids, phones and addresses are invented.
 - No real messaging: SMS, email and voice are sandbox stand-ins. Nothing is dialled or sent.
 - The prescriber loop, the DSCSA verifier and the key provider `kms` are sandbox stand-ins. Nothing is filed with any regulator or trading partner.
-- The drug rules are a small curated table, not a licensed interaction database.
+- The drug rules are a small curated table, not a licensed interaction database. The Rx Guardian's interaction and age-band tables are synthetic demo tables, not clinical content.
 - The cold-chain temperature is simulated.
 - No payment is processed; over-the-counter stock is not tracked.
 - No compliance, certification or clinical-validity claim. This is not a medical device.
