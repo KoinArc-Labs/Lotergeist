@@ -63,18 +63,28 @@ export class AnthropicClient implements LlmClient {
   }
 }
 
+/** The AWS SDK lives in this package; other packages load it through here (and tests stub it). */
+export const loadBedrockSdk = () => import("@aws-sdk/client-bedrock-runtime");
+
 export class BedrockClient implements LlmClient {
   readonly name = "bedrock";
   constructor(private region: string, private modelId: string) {}
   async complete(system: string, user: string): Promise<string> {
     const { BedrockRuntimeClient, ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
     const client = new BedrockRuntimeClient({ region: this.region });
-    const out = await client.send(new ConverseCommand({
+    const send = (inferenceConfig: { temperature?: number; maxTokens: number }) => client.send(new ConverseCommand({
       modelId: this.modelId,
       system: [{ text: system }],
       messages: [{ role: "user", content: [{ text: user }] }],
-      inferenceConfig: { temperature: 0, maxTokens: 1024 }
+      inferenceConfig
     }), { abortSignal: AbortSignal.timeout(30_000) });
+    let out;
+    try { out = await send({ temperature: 0, maxTokens: 1024 }); }
+    catch (e) {
+      // Newer models reject `temperature`; ask again without it. Any other error is passed up unchanged.
+      if (!/temperature/i.test(String((e as Error)?.message))) throw e;
+      out = await send({ maxTokens: 1024 });
+    }
     return (out.output?.message?.content ?? []).map((c) => ("text" in c ? c.text : "") ?? "").join("");
   }
 }
@@ -84,7 +94,7 @@ export function createLlmFromEnv(env: Record<string, string | undefined> = proce
   const provider = (env.LLM_PROVIDER ?? "").toLowerCase();
   if (provider === "none") return null;
   if (provider === "bedrock" || (!provider && (env.AWS_ACCESS_KEY_ID || env.AWS_PROFILE) && env.BEDROCK_MODEL_ID)) {
-    return new BedrockClient(env.AWS_REGION ?? "us-west-2", env.BEDROCK_MODEL_ID ?? "anthropic.claude-3-5-haiku-20241022-v1:0");
+    return new BedrockClient(env.AWS_REGION ?? "us-east-1", env.BEDROCK_MODEL_ID ?? "us.anthropic.claude-sonnet-5");
   }
   if (provider === "anthropic" || (!provider && env.ANTHROPIC_API_KEY)) {
     if (!env.ANTHROPIC_API_KEY) return null;

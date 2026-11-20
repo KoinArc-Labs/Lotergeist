@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { get, type User } from "../lib/api";
 import { C, Footer, Icon, MONO, pill, TONES } from "../components/kit";
 import { mainStyle, PageHeader } from "../components/Shell";
-import { Scenarios } from "../components/Scenarios";
+import { SuggestionsCard } from "../components/Suggestions";
 
 const EVENT_TONE: Record<string, string> = { Sold: "green", Filled: "violet", Received: "cold", Shelved: "cold", Quarantined: "red", Returned: "orange", Adjusted: "amber", Moved: "violet", Released: "green" };
 const TAG_TONE: Record<string, string> = { orange: "orange", green: "green", violet: "violet", red: "red" };
@@ -47,6 +47,8 @@ function ScanOrSearch() {
 export function Today({ user }: { user: User }) {
   const q = useQuery({ queryKey: ["today"], queryFn: () => get("/api/today"), refetchInterval: 15000 });
   const t = q.data;
+  const staff = user.role === "pharmacist" || user.role === "technician";
+  const refills = useQuery({ queryKey: ["refills-count"], queryFn: () => get("/api/refills"), enabled: staff, refetchInterval: 30000 });
   const max = Math.max(1, ...(t?.expiring ?? []).map((e: any) => e.n));
   const thisMonth = t?.expiring?.[0];
   const monthEnd = new Date(); monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1, 0);
@@ -66,7 +68,18 @@ export function Today({ user }: { user: User }) {
             </span>
           </Link>
         )}
-        <Scenarios user={user} />
+        {staff && refills.data && (
+          <Link to="/refills" aria-label={`Refills: ${refills.data.counts.due} due, ${refills.data.counts.blocked} blocked by a recall`} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, padding: "14px 20px", borderRadius: 14, border: `1px solid ${refills.data.counts.blocked ? "var(--danger)" : C.line}`, background: refills.data.counts.blocked ? "var(--danger-soft)" : C.card, color: C.ink, textDecoration: "none" }}>
+            <span style={{ fontSize: 28, fontWeight: 600, minWidth: 36 }}>{refills.data.counts.due}</span>
+            <span style={{ flex: "1 1 280px", display: "flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>Refills due or overdue</span>
+              <span style={{ fontSize: 13, color: refills.data.counts.blocked ? C.redText : C.dimmer }}>{refills.data.counts.blocked ? `${refills.data.counts.blocked} on hold: last fill from a recalled lot. ` : ""}{refills.data.counts.lowAdherence} with low adherence · {refills.data.counts.needsNewRx} need a new prescription</span>
+            </span>
+            {Icon.chevron()}
+          </Link>
+        )}
+
+        {t?.suggestions && <SuggestionsCard summary={t.suggestions} />}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16 }}>
           {(t?.kpis ?? []).map((k: any) => (

@@ -29,6 +29,8 @@ export const FILLABLE_REVIEW = new Set(["clear", "approved"]);
 export function rxDetail(ctx: Ctx, actor: Actor, rx: string) {
   const r = ctx.db.get<any>("SELECT r.*, p.name AS pname, p.dob, p.phone, p.email, p.preferred, p.sms_consent, p.email_consent, p.allergies, pr.name AS product, pr.ndc10 FROM prescriptions r JOIN patients p ON p.id = r.patient_id LEFT JOIN products pr ON pr.ndc11 = r.ndc11 WHERE r.rx = ?", rx);
   if (!r) throw new HttpError(404, "Unknown prescription.");
+  // Opening an order shows the patient's name, date of birth and allergies: log the view by ids only (no PHI in the audit).
+  audit(ctx, actor, "phi.view", "prescription", rx, undefined, { patientId: r.patient_id });
   const full = actor.role !== "cashier"; // cashiers see enough to hand over the medicine, not the whole profile
   const d = ctx.db.get<any>(
     `SELECT d.*, k.serial, k.expiry, k.location, l.lot FROM dispenses d LEFT JOIN packages k ON k.id = d.package_id LEFT JOIN lots l ON l.id = k.lot_id
@@ -92,9 +94,11 @@ export async function scanFill(ctx: Ctx, actor: Actor, rx: string, input: ScanIn
     exp
   ];
   const dispenseId = Number(ctx.db.tx(() => {
-    ctx.db.run("UPDATE packages SET status = 'dispensed' WHERE id = ?", pkg.id);
+    // Re-check inside the transaction: the checks above awaited the Rx Watcher and the scan parser, so a second scan of the same
+    // order (double submit, two workstations) may have filled it meanwhile. Conditional updates make the second one fail cleanly.
+    if (ctx.db.run("UPDATE prescriptions SET status = 'filled' WHERE id = ? AND status = 'to_fill'", r.id).changes !== 1) throw new HttpError(409, "This prescription already has a package scanned.", "already_scanned");
+    if (ctx.db.run("UPDATE packages SET status = 'dispensed' WHERE id = ? AND status = 'on_shelf'", pkg.id).changes !== 1) throw new HttpError(409, `Serial ${pkg.serial} was already dispensed.`, "not_on_shelf");
     const id = Number(ctx.db.run("INSERT INTO dispenses (rx_id, package_id, state, filled_by, filled_at, register, contact_json) VALUES (?,?,?,?,?,?,?)", r.id, pkg.id, "filled", actor.name, ctx.now(), "POS 2", "{}").lastInsertRowid);
-    ctx.db.run("UPDATE prescriptions SET status = 'filled' WHERE id = ?", r.id);
     lotEvent(ctx, "Filled", pkg.lot_id, actor.name, `Rx ${rx}`, pkg.id);
     return id;
   }));
@@ -152,7 +156,7 @@ export function sell(ctx: Ctx, actor: Actor, dispenseId: number, body: { idCheck
   const contact = { sms: d.sms_consent && d.phone ? d.phone : null, email: d.email_consent && d.email ? d.email : null, phone: d.phone || null };
   const at = ctx.now();
   ctx.db.tx(() => {
-    ctx.db.run("UPDATE dispenses SET state = 'sold', sold_at = ?, register = ?, id_checked = 1, counseled = 1, signature = 1, contact_json = ? WHERE id = ?", at, "POS 2", JSON.stringify(contact), dispenseId);
+    if (ctx.db.run("UPDATE dispenses SET state = 'sold', sold_at = ?, register = ?, id_checked = 1, counseled = 1, signature = 1, contact_json = ? WHERE id = ? AND state = 'verified'", at, "POS 2", JSON.stringify(contact), dispenseId).changes !== 1) throw new HttpError(409, "A pharmacist must verify this fill before it can be sold.");
     ctx.db.run("UPDATE prescriptions SET status = 'sold', due = ? WHERE id = ?", todayIso(ctx), d.rx_id);
     if (d.lot_id) lotEvent(ctx, "Sold", d.lot_id, actor.name, `Rx ${d.rx}`, d.package_id, at);
   });

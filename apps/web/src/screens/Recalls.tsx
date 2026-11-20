@@ -168,7 +168,7 @@ function Review({ r, imp, onChange, back, next }: { r: any; imp: any; onChange: 
       </div>
 
       <section aria-labelledby="pts" style={{ ...sec, overflow: "hidden" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px", flexWrap: "wrap", gap: 10 }}><h2 id="pts" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Affected patients</h2><span style={{ fontSize: 13, color: C.dimmer }}>Matched by lot recorded at fill</span></div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px", flexWrap: "wrap", gap: 10 }}><h2 id="pts" style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Affected patients</h2><span style={{ fontSize: 13, color: C.dimmer }}>Matched by lot recorded at fill</span>{r.lots.some((l: any) => l.confirmed) ? <a href={`/api/recalls/${r.id}/trace-export`} download title="EPCIS 2.0 events for the confirmed recalled lots. Patient ids only, no names. Sandbox, not a filing." style={btn("ghost", { minHeight: 36 })}>Export trace (EPCIS)</a> : <span style={{ fontSize: 12, color: C.dimmer }}>Confirm a lot to export its trace</span>}</div>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse", fontSize: 14 }}>
             <thead><tr style={{ textAlign: "left", fontSize: 12, color: C.dimmer, background: C.well }}>{["Patient", "Rx #", "Lot", "Sold", "Contact"].map((h) => <th key={h} scope="col" style={{ padding: "12px 20px", fontWeight: 500 }}>{h}</th>)}</tr></thead>
@@ -232,12 +232,32 @@ function Notify({ r, imp, back, onSent }: { r: any; imp: any; back: () => void; 
     },
     onSuccess: onSent, onError: (e) => setErr(msg(e))
   });
+  // The Recall Outreach Drafter writes warmer wording. It only fills the boxes below: the pharmacist edits, attests and sends through this same flow.
+  const [aiNote, setAiNote] = useState("");
+  const useAi = useMutation({
+    mutationFn: () => post(`/api/agents/outreach-drafter/run`, { input: { recallId: r.id } }),
+    onSuccess: (d: any) => {
+      const tp = d.run?.gatedOutput?.templates;
+      if (!tp) { setErr("The AI draft did not come back. The approved wording is still in place."); return; }
+      const phone = pv?.fields?.pharmacy_phone ?? "(555) 010-2200";
+      const lit = (x: string) => x.split("{pharmacy_phone}").join(phone);
+      setT({ sms: lit(tp.sms), emailSubject: tp.emailSubject, emailBody: lit(tp.emailBody) });
+      setScript(tp.voicemail); setHeard(null); setAttest(false); setErr("");
+      const n = Object.values(d.run.gatedOutput.source ?? {}).filter((x) => x === "ai").length;
+      setAiNote(`${n} of 4 pieces are AI wording${d.run.dropped?.length ? `; ${d.run.dropped.length} fell back to the approved text` : ""}. Nothing was sent. Read it, edit it, then attest.`);
+    },
+    onError: (e) => setErr(msg(e))
+  });
   if (!t || !vm.data || script === null) return <p style={{ color: C.dim }}>Loading the draft…</p>;
   const v = vm.data;
   const voiceLabel = v.voice.provider === "browser" ? `This device's voice (${deviceVoiceName()})` : `${v.voice.voice} · ${v.voice.provider}`;
   const area = { resize: "vertical", padding: 14, borderRadius: 10, border: `1px solid ${C.line2}`, background: C.well, color: C.ink, font: "inherit", fontSize: 15, lineHeight: 1.5 } as const;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", padding: "12px 16px", borderRadius: 12, background: "var(--accent-soft)" }}>
+        <button className="btn" disabled={useAi.isPending} onClick={() => useAi.mutate()}>{useAi.isPending ? "Drafting…" : "Use AI draft"}</button>
+        <span style={{ flex: "1 1 320px", fontSize: 13, lineHeight: 1.5 }}><strong>AI draft, a pharmacist approves.</strong> {aiNote || "Loads friendlier wording into the text, email and voicemail boxes below. You can still edit it, and nothing is sent until you attest."}</span>
+      </div>
       <section aria-labelledby="vm" className="card pad" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
           <div><h2 id="vm" className="h2">Pharmacist voicemail · {v.callCount} patient{v.callCount === 1 ? "" : "s"}</h2><p className="sub">One call per patient from the pharmacy number, {v.window}. The message never names the medicine or the reason. Press 1 transfers to the pharmacist.</p></div>
@@ -295,7 +315,6 @@ function Done({ r, onChange }: { r: any; onChange: () => void }) {
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const act = (path: string, ok: string) => async () => { try { await post(`/api/recalls/${r.id}/${path}`); setNote(ok); setErr(""); onChange(); void res.refetch(); } catch (e) { setErr(msg(e)); } };
-  const reset = useMutation({ mutationFn: () => post("/api/demo/reset"), onSuccess: () => window.location.reload() });
   const x = res.data;
   if (!x) return <p style={{ color: C.dim }}>Loading…</p>;
   const has = (k: string) => x.actions.some((a: any) => a.kind === k);
@@ -340,7 +359,6 @@ function Done({ r, onChange }: { r: any; onChange: () => void }) {
         <ErrorBox e={err} />
       </section>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button onClick={() => reset.mutate()} style={btn("ghost", { minHeight: 44 })}>Replay demo</button>
         <button disabled={x.status === "closed"} onClick={act("close", "Recall closed. The lots stay blocked at receiving and fill.")} style={btn("ghost", { minHeight: 44, opacity: x.status === "closed" ? 0.5 : 1 })}>{x.status === "closed" ? "Recall closed" : "Close this recall"}</button>
       </div>
     </div>

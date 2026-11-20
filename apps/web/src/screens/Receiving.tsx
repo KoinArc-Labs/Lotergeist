@@ -6,6 +6,7 @@ import { gs1Text } from "../lib/gs1";
 import { play } from "../lib/sound";
 import { ScanPanel } from "../components/ScanPanel";
 import { DataMatrix } from "../components/DataMatrix";
+import { VerifyPanel } from "../components/VerifyPanel";
 import { btn, C, CheckList, ErrorBox, Footer, Icon, input, label, MONO, pill } from "../components/kit";
 
 const ZONE: Record<string, { tint: string; pill: [string, string] }> = {
@@ -48,7 +49,6 @@ export function Receiving({ user }: { user: User }) {
     onSuccess: () => { setToast("Problem logged. The package is in quarantine Q-1."); clear(); setErr(""); refresh(); },
     onError: (e) => setErr(msg(e))
   });
-  const reset = useMutation({ mutationFn: () => post("/api/demo/reset"), onSuccess: () => { window.location.reload(); } });
 
   const d = out && out.delivery?.id === id ? out.delivery : view.data; // while a package is on screen, its invoice line shows "Scanning now"
   const done = d && d.checkedIn >= d.expected;
@@ -89,7 +89,6 @@ export function Receiving({ user }: { user: User }) {
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Link to="/inventory" style={btn("primary", { minHeight: 46, padding: "0 20px", fontSize: 14 })}>View in inventory</Link>
                 {open.length > 0 && <button onClick={() => setPick(open[0].id)} style={btn("ghost", { minHeight: 46, fontSize: 14 })}>Next delivery: {open[0].id}</button>}
-                {user.role === "pharmacist" && <button onClick={() => reset.mutate()} style={btn("ghost", { minHeight: 46, fontSize: 14 })}>Replay demo</button>}
               </div>
             </div>
           )}
@@ -138,6 +137,7 @@ export function Receiving({ user }: { user: User }) {
                   <span style={pill(zone.pill[0], zone.pill[1], { fontSize: 13, fontWeight: 600, padding: "6px 12px" })}>{out.suggestion.zoneLabel}</span>
                 </div>
                 <CheckList checks={out.checks} />
+                <VerifyPanel key={out.packageId} out={out} user={user} />
                 {out.noSerial && <p style={{ margin: 0, fontSize: 13, color: C.amber2 }}>No serial on this label. It got an internal id; check the supplier paperwork by hand.</p>}
 
                 {out.needsWitness && out.canConfirm && (

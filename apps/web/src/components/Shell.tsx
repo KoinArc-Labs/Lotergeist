@@ -27,15 +27,19 @@ export function ThemeSwitch() {
   );
 }
 
-/** Required on every page (pharmacy-safety rule 8). */
+/** Required on every page (pharmacy-safety rule 10). */
 export const SafetyBanner = () => (
-  <div className="safety" role="note">Synthetic data only · Not for clinical use · Not HIPAA-compliant · A pharmacist approves every message</div>
+  <div className="safety" role="note">Demo environment · synthetic data only · not for clinical use · not HIPAA-compliant · a pharmacist approves every message</div>
 );
 
 const NavIcon = {
   patients: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="10" cy="7" r="3.2" /><path d="M3.5 17c1.2-3 3.6-4.5 6.5-4.5s5.3 1.5 6.5 4.5" /></svg>,
   plug: <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M7 2.5v4M13 2.5v4M5 6.5h10v3a5 5 0 01-10 0zM10 14.5v3" /></svg>
 };
+
+const AgentsIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M10 2.5l1.6 4.4 4.4 1.6-4.4 1.6L10 14.5 8.4 10.1 4 8.5l4.4-1.6zM15.5 13l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" /></svg>
+);
 
 export function Shell({ user, children }: { user: User; children: ReactNode }) {
   const qc = useQueryClient();
@@ -44,6 +48,9 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
   const queue = useQuery({ queryKey: ["rxq"], queryFn: () => get<any[]>("/api/rx"), refetchInterval: 15000, enabled: user.role === "pharmacist" || user.role === "technician" });
   const badges = today.data?.badges ?? { receiving: 0, recalls: 0 };
   const flagged = (queue.data ?? []).filter((r) => r.status === "to_fill" && (r.review === "pending" || r.review === "on_hold")).length;
+  // Background agents switched on (the same query the AI agents screen uses).
+  const agentsQ = useQuery({ queryKey: ["agents"], queryFn: () => get<{ background?: { on: number; allowed: boolean } }>("/api/agents"), refetchInterval: 15000, enabled: user.role !== "cashier" });
+  const agentsOn = agentsQ.data?.background?.on ?? 0;
   const me = useQuery({ queryKey: ["me"], queryFn: () => get<{ store?: { name: string } }>("/api/me"), staleTime: 60_000 });
   const storeName = (me.data?.store?.name ?? "Elm Street Pharmacy · Store 7").replace(" Pharmacy", "");
   const [menu, setMenu] = useState(false);
@@ -53,6 +60,7 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
     <NavLink to={to} end={to === "/"}>{icon}{label}{badge}</NavLink>
   );
   const clinical = user.role !== "admin";
+  const demoMode = !!useQuery({ queryKey: ["auth-config"], queryFn: () => get<{ demo: unknown }>("/api/auth/config"), staleTime: 300_000 }).data?.demo;
   return (
     <div className="app">
       <aside className="side">
@@ -73,15 +81,21 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
             <span className="nav-label">Care</span>
             {user.role !== "cashier" && item("/patients", "Patients", NavIcon.patients)}
             {item("/recalls", "Recalls", Icon.shield(), badges.recalls ? <span className="count red">{badges.recalls}</span> : null)}
+            {(user.role === "technician" || user.role === "pharmacist") && item("/refills", "Refills", Icon.rx())}
+            {(user.role === "technician" || user.role === "pharmacist") && item("/dscsa", "DSCSA & trace", Icon.shield())}
+          </>}
+          {user.role !== "cashier" && <>
+            <span className="nav-label">AI</span>
+            {item("/agents", "AI agents", <AgentsIcon />)}
+            <span role="status" aria-label={`Background agents on: ${agentsOn}`} style={{ fontSize: 12, color: agentsOn ? "var(--ok-text)" : "var(--subtle)", padding: "0 14px 6px 46px" }}>Agents on: {agentsOn}{agentsQ.data?.background && !agentsQ.data.background.allowed ? " (paused by server)" : ""}</span>
           </>}
           {(user.role === "admin" || user.role === "pharmacist") && <>
             <span className="nav-label">Admin</span>
             {item("/integrations", "Integrations", NavIcon.plug)}
           </>}
-          {clinical && <>
-            <span className="nav-label">Demo tools</span>
-            {item("/labels", "Test labels", Icon.tag())}
-            {item("/outbox", "Sandbox outbox", Icon.mail())}
+          {demoMode && (user.role === "pharmacist" || user.role === "technician") && <>
+            <span className="nav-label">Demo</span>
+            {item("/demo", "Demo guide", Icon.tag())}
           </>}
         </nav>
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10, position: "relative" }}>

@@ -190,6 +190,9 @@ importers:
       '@chimera-rx/coroner':
         specifier: workspace:*
         version: link:../../packages/coroner
+      '@chimera-rx/epcis':
+        specifier: workspace:*
+        version: link:../../packages/epcis
       '@chimera-rx/gs1':
         specifier: workspace:*
         version: link:../../packages/gs1
@@ -273,6 +276,15 @@ importers:
       '@aws-sdk/client-bedrock-runtime':
         specifier: 3.1163.0
         version: 3.1163.0
+      '@chimera-rx/gs1':
+        specifier: workspace:*
+        version: link:../gs1
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+
+  packages/epcis:
+    dependencies:
       '@chimera-rx/gs1':
         specifier: workspace:*
         version: link:../gs1

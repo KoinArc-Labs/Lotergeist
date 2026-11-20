@@ -124,5 +124,9 @@ export function findPatients(ctx: Ctx, actor: Actor, q: string) {
   need(actor);
   const t = q.trim().replace(/[%_]/g, "");
   if (t.length < 2) return [];
-  return ctx.db.all<{ id: string; name: string }>("SELECT id, name FROM patients WHERE name LIKE ? OR id LIKE ? ORDER BY name LIMIT 10", `%${t}%`, `%${t}%`);
+  // Names are encrypted at rest, so the match runs on opened rows (pilot scale); see docs/SECURITY.md.
+  const needle = t.toLowerCase();
+  return ctx.db.all<{ id: string; name: string }>("SELECT id, name FROM patients")
+    .filter((p) => p.name.toLowerCase().includes(needle) || p.id.toLowerCase().includes(needle))
+    .sort((a, b) => a.name.localeCompare(b.name)).slice(0, 10);
 }

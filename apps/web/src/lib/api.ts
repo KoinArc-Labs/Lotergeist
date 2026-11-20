@@ -12,7 +12,7 @@ export async function api<T = any>(method: "GET" | "POST", url: string, body?: u
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
   if (!res.ok) {
-    if (res.status === 401 && url !== "/api/me") window.dispatchEvent(new Event("lg:unauthenticated"));
+    if (res.status === 401 && url !== "/api/me" && !url.startsWith("/api/auth/")) window.dispatchEvent(new Event("lg:unauthenticated"));
     throw new ApiError(data.error ?? `Request failed (${res.status})`, res.status, data.code);
   }
   return data as T;

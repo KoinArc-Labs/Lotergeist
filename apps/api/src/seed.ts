@@ -138,7 +138,7 @@ export function seedDatabase(db: Db, cfg: Config, now = Date.now()) {
     RECALL_PATIENTS.forEach((p, i) => addPatient(p.id, p.name, p.ch, i + 1));
     // Call-only patients have a phone number but no text or email consent.
     addPatient("S-0612", "Daniel Brooks", "se", 42, { dob: "1968-03-14", allergies: "penicillin" });
-    db.run("UPDATE patients SET phone = '(555) 010-0142', email = 'd.brooks@example.com' WHERE id = 'S-0612'");
+    db.run("UPDATE patients SET phone = ?, email = ? WHERE id = 'S-0612'", "(555) 010-0142", "d.brooks@example.com");
     // Linda, James, Priya, Grace already exist above as recall patients; the queue reuses them.
     const pool: string[] = [];
     const firsts = ["Ana", "Ben", "Chloe", "Dev", "Eli", "Faye", "Gus", "Hana", "Ivan", "Jade", "Kai", "Lena", "Milo", "Nora", "Owen", "Pia", "Quinn", "Rae", "Sam", "Tess"];
@@ -319,6 +319,8 @@ export function seedDatabase(db: Db, cfg: Config, now = Date.now()) {
     db.run("INSERT INTO meta (key, value) VALUES ('seeded', ?)", String(now));
     db.run("INSERT INTO meta (key, value) VALUES ('seed_version', ?)", SEED_VERSION);
     db.run("INSERT INTO meta (key, value) VALUES ('last_sync', ?)", String(now - 2 * 60_000));
+    // Background agents: with the demo on, the Rx Guardian starts switched on so a judge sees it work without setup. A pharmacist can switch it off.
+    if (cfg.demo) db.run("INSERT OR REPLACE INTO agent_settings (agent, enabled, enabled_by, enabled_at, next_run_at, runs_today) VALUES ('rx-guardian', 1, 'demo seed', ?, ?, 0)", now, now);
   });
   if (cfg.dataset === "large") generateHistory(db);
   return true;

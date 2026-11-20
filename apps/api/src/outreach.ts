@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { audit, emit, HttpError, type Actor, type Ctx } from "./core";
+import { findPatientByPhone } from "./patients";
 import { merge, PHARMACY_PHONE, recallImpact } from "./recall";
 
 /**
@@ -178,7 +179,7 @@ export function outreachResults(ctx: Ctx, recallId: string) {
 export function inboundCall(ctx: Ctx, from: string) {
   const digits = from.replace(/\D/g, "").slice(-10);
   if (digits.length < 7) throw new HttpError(422, "Caller ID is missing.");
-  const p = ctx.db.get<{ id: string; name: string }>("SELECT id, name FROM patients WHERE replace(replace(replace(replace(phone,'(',''),')',''),'-',''),' ','') LIKE ?", `%${digits}`);
+  const p = findPatientByPhone(ctx, digits);
   if (!p) return { known: false };
   const c = ctx.db.get<{ id: number; recall_id: string }>("SELECT c.id, c.recall_id FROM outreach_calls c JOIN recalls r ON r.id = c.recall_id WHERE c.patient_id = ? AND r.status <> 'closed' ORDER BY c.id DESC LIMIT 1", p.id);
   if (c) ctx.db.run("UPDATE outreach_calls SET callback_at = ? WHERE id = ?", ctx.now(), c.id);

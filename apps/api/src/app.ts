@@ -16,7 +16,10 @@ import { decide, listMessages, proposeFix, respond } from "./prescriber";
 import { addWebhook, deliveries, WEBHOOK_EVENTS } from "./webhooks";
 import { ALL_SCOPES, apiActivity, createPartner, listPartners, rotateSecret, SCOPES, securityPosture, seedPartners, updatePartner, type Scope } from "./integrations";
 import { registerPartnerApi } from "./partner-api";
-import { patientProfile, refillSync, searchPatients } from "./patients";
+import { registerAgentRoutes, listSuggestions } from "./agents";
+import { registerEpcisRoutes } from "./epcis";
+import { registerRefillRoutes } from "./refills-routes";
+import { findPatientByPhone, patientProfile, refillSync, searchPatients } from "./patients";
 import { inboundCall, outreachResults, previewVoicemail, runOutreachAgent, startVoicemail, voicemailDraft } from "./outreach";
 import { fillQueue, printLabel, rxDetail, scanFill, sell, sendBack, verifyDispense } from "./fill";
 import { adjustLot, listLots, lotDetail, moveLot } from "./inventory";
@@ -28,6 +31,7 @@ import { gtinOf, ndc11Digits } from "./domain";
 import { ingestFaxInbox, pollOpenFda, todayView } from "./today";
 import { splitStore, withStore } from "./stores";
 import { otherStores, transferPackages } from "./crossstore";
+import { corsOriginsFrom, publicError, registerSecurity } from "./security";
 import { listScenarios, resetDemo, scenarioLabels, startScenario } from "./scenarios";
 
 declare module "fastify" { interface FastifyRequest { actor?: Actor; user?: SessionUser } }
@@ -41,15 +45,18 @@ const scanBody = z.object({
 const witnessBody = z.object({ email: z.string().email(), password: z.string().min(1).max(200) }).optional();
 
 export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false, bodyLimit: 2_000_000 });
+  const app = Fastify({ logger: false, bodyLimit: 2_000_000, trustProxy: process.env.TRUST_PROXY === "1" });
   await app.register(cookie);
-  await app.register(cors, { origin: true, credentials: true });
+  // Only the listed origins may call the API from a browser (CORS_ORIGINS); same-origin and non-browser callers need no CORS.
+  const corsOrigins = corsOriginsFrom();
+  await app.register(cors, { origin: (origin, cb) => cb(null, !origin || corsOrigins.includes(origin)), credentials: true });
+  registerSecurity(app, ctx, { corsOrigins });
 
+  // Error bodies are rebuilt from a fixed vocabulary (security.ts) so they never echo what the caller sent.
   app.setErrorHandler((err: any, _req, reply) => {
-    if (err instanceof ZodError) return reply.code(422).send({ error: "Some fields are missing or wrong.", issues: err.issues.map((i) => `${i.path.join(".")}: ${i.message}`) });
-    if (err instanceof HttpError) return reply.code(err.status).send({ error: err.message, code: err.code });
-    app.log.error(err);
-    return reply.code(err.statusCode ?? 500).send({ error: err.message ?? "Something went wrong." });
+    const e = publicError(err);
+    (reply as any).__errClass = err?.constructor?.name;
+    return reply.code(e.status).send(e.body);
   });
 
   // ---- two stores (FR4): the session cookie says which store's database every query in this request uses
@@ -173,8 +180,15 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
   });
 
   // ---- fill & pickup
-  app.get("/api/rx", async () => fillQueue(ctx));
-  app.get("/api/rx/:rx", async (req) => rxDetail(ctx, A(req), (req.params as { rx: string }).rx));
+  app.get("/api/rx", async (req) => {
+    only(req, "cashier", "technician", "pharmacist"); // admin has no job in the fill queue (patient names)
+    const rows = fillQueue(ctx);
+    // Rx Guardian: an order with open suggestions carries their count and the worst severity. A cashier sees none of it.
+    if (A(req).role === "cashier") return rows;
+    const open = listSuggestions(ctx, { status: "open", limit: 500 });
+    return rows.map((r) => { const mine = open.filter((s) => s.rxNumber === r.rx); return { ...r, suggestions: mine.length, suggestionSeverity: mine[0]?.severity ?? null }; });
+  });
+  app.get("/api/rx/:rx", async (req) => { only(req, "cashier", "technician", "pharmacist"); return rxDetail(ctx, A(req), (req.params as { rx: string }).rx); });
   // ---- Rx Watcher and the prescriber channel
   const rxp = (req: FastifyRequest) => (req.params as { rx: string }).rx;
   app.get("/api/rx/:rx/review", async (req) => { only(req, "technician", "pharmacist"); return reviewView(ctx, rxp(req)); });
@@ -217,10 +231,12 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     return { recall: v, impact: recallImpact(ctx, rid(req)) };
   });
   app.get("/api/recalls/:id/messages", async (req) => {
+    only(req, "technician", "pharmacist"); // the preview names a patient
     const d = messageDraft(ctx, rid(req));
     return { ...d, smsPreview: merge(d.sms, d.fields), smsInfo: smsSegments(merge(d.sms, d.fields)) };
   });
   app.post("/api/recalls/:id/preview", async (req) => {
+    only(req, "technician", "pharmacist"); // merges the first patient's fields into the text
     const b = z.object({ sms: z.string().max(1000), emailSubject: z.string().max(300), emailBody: z.string().max(6000) }).parse(req.body);
     const d = messageDraft(ctx, rid(req));
     const sms = merge(b.sms, d.fields);
@@ -264,6 +280,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
 
   // ---- sandbox outbox
   app.get("/api/outbox", async (req) => {
+    only(req, "technician", "pharmacist"); // bodies and addresses of patient messages
     const q = req.query as { recall?: string };
     return ctx.db.all(`SELECT o.*, n.recall_id, n.patient_id FROM outbox o LEFT JOIN notifications n ON n.id = o.notification_id ${q.recall ? "WHERE n.recall_id = ?" : ""} ORDER BY o.id DESC LIMIT 200`, ...(q.recall ? [q.recall] : []));
   });
@@ -272,7 +289,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     const b = z.object({ from: z.string().min(7).max(30), body: z.string().max(200) }).parse(req.body);
     if (!/^\s*stop\s*$/i.test(b.body)) return { handled: false };
     const digits = b.from.replace(/\D/g, "");
-    const p = ctx.db.get<{ id: string }>("SELECT id FROM patients WHERE replace(replace(replace(replace(phone,'(',''),')',''),'-',''),' ','') LIKE ?", `%${digits.slice(-10)}`);
+    const p = findPatientByPhone(ctx, digits.slice(-10));
     if (!p) return { handled: false };
     ctx.db.run("UPDATE patients SET sms_opt_out = 1 WHERE id = ?", p.id);
     audit(ctx, null, "sms.opt_out", "patient", p.id);
@@ -284,7 +301,7 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     if (q.length < 2) return { lots: [], rx: [] };
     const g = parseElementString(q);
     if (g.ok && g.value.lot) return { lots: listLots(ctx, { q: g.value.lot }).rows.slice(0, 6), rx: [], scanned: { lot: g.value.lot, serial: g.value.serial ?? "" } };
-    return { lots: listLots(ctx, { q }).rows.slice(0, 6), rx: fillQueue(ctx).filter((r) => [r.rx, r.patient, r.drug].some((v) => v.toLowerCase().includes(q.toLowerCase()))).slice(0, 6) };
+    return { lots: listLots(ctx, { q }).rows.slice(0, 6), rx: A(req).role === "admin" ? [] : fillQueue(ctx).filter((r) => [r.rx, r.patient, r.drug].some((v) => v.toLowerCase().includes(q.toLowerCase()))).slice(0, 6) };
   });
 
   app.get("/api/audit", async (req) => { only(req, "pharmacist", "admin"); return ctx.db.all("SELECT id, at, user_name, workstation, action, entity, entity_id, reason, hash FROM audit ORDER BY id DESC LIMIT 100"); });
@@ -371,6 +388,9 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
 
   // ---- partner surfaces: /oauth/token, /v1, /mcp, /fhir/r4 (their own auth, scopes and log)
   seedPartners(ctx);
+  registerRefillRoutes(app, ctx); // recall-aware refills and adherence (refills.ts)
+  registerAgentRoutes(app, ctx); // AI agents (agents/): advisory, role-checked, audited
+  registerEpcisRoutes(app, ctx); // DSCSA trace (epcis.ts): EPCIS export/import, sandbox verifier, suspect cases
   await registerPartnerApi(app, ctx);
 
   // ---- built web app
@@ -380,10 +400,15 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
     return reply.type("image/png").send(fs.readFileSync(f));
   });
   if (fs.existsSync(path.join(ctx.cfg.webDist, "index.html"))) {
-    await app.register(fastifyStatic, { root: ctx.cfg.webDist, wildcard: false });
+    // wildcard: true looks each file up when it is requested, so a `pnpm build:web` while the API runs serves the new hashed
+    // assets at once (wildcard: false lists dist once at start and 404s every asset built after that).
+    await app.register(fastifyStatic, { root: ctx.cfg.webDist, wildcard: true });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith("/api/")) return reply.code(404).send({ error: "not found" });
-      return reply.type("text/html").send(fs.readFileSync(path.join(ctx.cfg.webDist, "index.html")));
+      const url = req.url.split("?")[0]!;
+      if (url.startsWith("/api/")) return reply.code(404).send({ error: "not found" });
+      // A missing file (an old hashed asset) is a real 404, never index.html served as a script.
+      if (/\.[A-Za-z0-9]{1,8}$/.test(url)) return reply.code(404).type("text/plain").send("not found");
+      return reply.type("text/html").header("Cache-Control", "no-cache").send(fs.readFileSync(path.join(ctx.cfg.webDist, "index.html")));
     });
   }
   return app;

@@ -1,50 +1,91 @@
-# Demo script (under 3 minutes)
+# Demo script
 
-This is the script for the submission video and for anyone trying the app by hand. Judges are not required to watch past 3:00, so the story is front-loaded.
+A 3-minute path for the video and for a judge, an 8-minute path for a longer look, and a table for when something fails.
 
-## Before you record
+Timestamps are **targets**, not measurements. `pnpm e2e` proves every step works (40 of 40 checks), but nobody has timed a person doing this on camera. Rehearse once and adjust. Judges need not watch past 3:00, so the story is front-loaded.
+
+## Before you start
 
 ```bash
-pnpm install && pnpm setup && pnpm dev
+pnpm install --frozen-lockfile
+pnpm setup                # once; needs network for the OCR model
+pnpm dev                  # API :4000, web :5173
 ```
 
-- Open http://localhost:5173 in Chrome (the camera needs `localhost` or HTTPS).
-- Open **Test labels** on a phone or print them, so you can hold codes up to the webcam.
-- Sign in as the pharmacist (`j.rivera@elmstreetrx.example` / `moonlight-rx-2026`). The technician account is needed only for the Schedule II witness.
-- Reset between takes: **Reset demo** on the Today screen (or the **Replay demo** button on the recall's Done step). The Today screen also has five scenarios, each with a short brief of what to try.
+Or `docker compose up` and open http://localhost:4000 (the Docker image was not built on the machine that wrote this repo).
 
-## Script
+- Use Chrome on `localhost` (the camera needs `localhost` or HTTPS).
+- Sign in as the pharmacist, `j.rivera@elmstreetrx.example` / `moonlight-rx-2026`. Other accounts are in the [README](../README.md#demo-accounts).
+- For a model-free run with sensible text, start the API with `LLM_PROVIDER=mock` (the Docker image uses `none`, which shows "rules only"). To use a real model, see the README's AI agents section.
+- Reset between takes: **Reset demo** on the Today screen. The scenario buttons also reset the data.
+- Optional: open **Test labels** on a phone or print it, so you can hold codes up to the webcam. Without a camera, paste a code into the scan box.
+
+## Where the demo tools live
+
+The product screens carry no demo content. Everything that exists only for the demo is on one page, **Demo guide** (sidebar, under "Demo"; pharmacist and technician; hidden when the API runs with `LG_DEMO=0`):
+
+- the three-minute path as links,
+- the scenario library and **Reset demo** (pharmacist),
+- **Test labels** and the **Sandbox outbox**,
+- the demo accounts.
+
+The sign-in page still shows the demo accounts and badge button while `LG_DEMO` is on. Set `LG_DEMO=0` for a product-only view. The demo notice (pharmacy-safety rule 10) stays on every staff page either way.
+
+## 3-minute path
+
+Start on a fresh reset, not on a scenario. The seeded state has the recall fax D-0417-2026 waiting.
 
 | Time | Screen | Do and say |
 | --- | --- | --- |
-| 0:00 | Sign in | "When a drug lot is recalled, the pharmacy knows who got the drug, not who got the bad lot. So it warns everyone, or no one." |
-| 0:15 | Today | The red banner: recall fax D-0417-2026 arrived overnight. "Chimera Rx already knows: 2 of these lots came here, 197 units are on the shelf, 17 patients took one home." |
-| 0:30 | Receiving | Start the camera and hold up the amoxicillin label. Four checks pass (invoice, transaction information, expiry, recall) and it says where the package goes. Confirm. "The lot and serial are now in the ledger." |
-| 0:55 | Receiving | Hold up a label with an unknown serial. The TI/TS check fails and only **Report a problem** is allowed. |
-| 1:10 | Fill & pickup | Rx 0072210 (insulin). Rx Watcher has flagged it: twice-daily dosing written as a 90-day supply. The order can't be scanned until a pharmacist decides: approve with a reason, reject, or send a change request to the prescriber. Approve it, then scan the pen. "The lot is saved on the prescription. This is the link no one records today." |
-| 1:35 | Recalls | **Read this fax with OCR**. The browser reads the fax image, openFDA confirms the recall, the Coroner pulls both lots. "An LLM may suggest a lot, but if it isn't printed on the notice, it's thrown away." |
-| 1:55 | Recalls | Review impact: 197 units moved to quarantine Q-1, 17 patients, 13 by text, 11 by email, 2 by phone. |
-| 2:10 | Recalls | Notify: the merged SMS preview, the attestation, send. Done: 12 of 13 texts delivered, the call list, the PDF audit report. "Nothing really leaves this laptop: it's a sandbox." |
-| 2:30 | Integrations | The MCP and FHIR surfaces. "An EHR or an AI agent can ask which recalled lots this store holds, with its own scoped key." |
-| 2:45 | Kiro | The `.kiro/` folder: steering, specs, the property-test hook. "Built with Kiro, spec first, property-tested." |
+| 0:00 | Sign-in | "When a drug lot is recalled, a pharmacy knows who got the drug, not which lot. So it warns everyone, or no one." Point at the demo notice. Sign in as the pharmacist. |
+| 0:15 | Today | The red banner: recall fax D-0417-2026 arrived. "197 units on the shelf, 17 patients took one home." Say the path: recall notice, quarantined lots, patients, messages (the links are on **Demo guide**). |
+| 0:30 | Recalls | **Start recall**, then **Read this fax with OCR**. The browser reads the image, openFDA confirms the record, the Coroner pulls both lots. "A lot is kept only if it is printed in the notice. The model cannot add one." |
+| 0:55 | Recalls | Review impact: units moved to quarantine, the patient list, the channels per consent. |
+| 1:10 | Recalls | Messages: press **Use AI draft** (agent output is labelled "AI advisory, a pharmacist decides"), tick the attestation, send. "Nothing leaves this laptop: it goes to a sandbox outbox." Open **Sandbox outbox** to show a text carrying the pharmacy phone and STOP. |
+| 1:40 | AI agents | Run the Coroner and the Rx Watcher Explainer on their sample input. Show a dropped item in the run detail. "Rules decide, the model explains, a gate checks the model, a pharmacist decides." Mention the provider switch (Bedrock default, Anthropic, OpenAI-compatible, mock, none). |
+| 2:05 | DSCSA & trace | **Download .jsonld** for a lot and **Ask the sandbox verifier**. "Package-level lot and serial events as EPCIS 2.0, so the recall trace can be exchanged. A sandbox, not a filing." |
+| 2:25 | Refills | Open the worklist: due refills, adherence, med sync. "A refill for a patient whose last fill came from a recalled lot is held, and stays held after the recall closes." (The red recall-hold row appears in the *Recall-aware refill* scenario, in the 8-minute path.) |
+| 2:40 | Integrations or Transfers | One sentence: partner REST, MCP and FHIR with scoped keys; two stores with transfers that keep lot and serial. |
+| 2:50 | Kiro | Show `.kiro/`: steering with the safety rules, specs, hooks. "Built with Kiro. Eleven safety rules are tested one by one." |
 
-## Other things worth showing if time allows
+## 8-minute path
 
-- **The real recall.** Look up D-0526-2026 (a real Hikma alendronate recall). Its lot AC2040A then fails the dock check when you scan it from delivery ASH-1105-08.
-- **Schedule II.** Scanning the oxycodone package asks for a witness. The witness must be a different staff member and must enter their own password.
-- **Roles.** Sign in as the cashier: Fill shows pickup only, with no allergies or date of birth.
-- **Audit.** `GET /api/audit/verify` recomputes the hash chain.
+Do the 3-minute path, then add these in order. Each scenario resets the data, so do them after the recall steps.
 
-## Fallbacks
+| Time | Screen | Do and say |
+| --- | --- | --- |
+| 3:00 | Receiving | Start the camera (or paste a code from Test labels) on the amoxicillin label. Four checks pass: invoice, transaction information, expiry, recall. Confirm. "The lot and serial are now in the ledger." |
+| 3:30 | Receiving | Scenario **Suspect product**: scan the label marked suspect. The TI/TS check fails and only **Report a problem** works. On DSCSA & trace it appears as a suspect case. |
+| 4:00 | Fill & pickup | Rx 0072210 (insulin). Rx Watcher flags twice-daily dosing written as a 90-day supply. The order can't be scanned until a pharmacist approves, rejects or sends a change request. Approve, then scan the pen. "The lot is saved on the prescription. That is the link nobody records today." |
+| 4:40 | Today | Scenario **Class I recall**: Recalls, look up `D-0611-2026`. Lot GX4471C is confirmed, pens are quarantined, patients listed. |
+| 5:20 | Refills | Scenario **Recall-aware refill**, then look up `D-0611-2026`. Priya's row turns red and links to the recall. Draft reminders: the recalled row gets none. |
+| 6:00 | Transfers | Move a package to Store 2. Both audit logs record it. Sign in as `s.okoro@birchavenuerx.example` to see it arrive and the mirrored recall. |
+| 6:40 | Register | Sell an over-the-counter item and one verified prescription. A recalled lot is blocked by name. |
+| 6:50 | Today | Scenario **Agent catches it**: stay on Today. Rx Guardian is on in the background; within about a minute the Suggestions card shows late insulin fills, a GLP-1 pen interaction and a recalled lot in the history (or press Run now on AI agents). Open the order, read the evidence, accept one: the order goes on hold. The agent never changes an order. |
+| 7:10 | Roles and audit | Sign in as the cashier: no allergies or birth dates, no outbox. Then `GET /api/audit/verify` returns the chain as intact. |
+| 7:40 | Security | Open `docs/SECURITY.md`: what is encrypted, how the key rotates, what is not covered. |
 
-- **No webcam or poor light.** Paste a code from Test labels into the scan box, or use a USB scanner.
-- **openFDA offline.** The app falls back to the recall fixtures and says so.
-- **OCR slow on first run.** The first read loads the model (about 4 MB) from `apps/web/public/ocr`; later reads are fast.
+## If something fails
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Blank page after rebuilding | Old tab holding stale assets | Hard-reload. The API reads the web build from disk on every request, so no restart is needed. |
+| Sign-in or any POST says "That origin is not allowed." | The web app runs on a port not in the CORS list | Set `CORS_ORIGINS=http://localhost:<web port>` and restart the API. |
+| AI agent shows "rules only" | Provider is `none`, or the model call failed and the provider is paused for 60 s | Choose `mock` on the AI agents screen, or fix the credentials and press **Test connection**. |
+| Bedrock test fails | No AWS credentials, wrong region or no model access | Set `AWS_REGION`, `AWS_PROFILE`, `BEDROCK_MODEL_ID`, or switch to `mock`. Live Bedrock was checked once on 2026-11-20; model IDs are retired over time, so list current ones with `aws bedrock list-inference-profiles`. |
+| Camera does not start | Not on `localhost` or HTTPS, or permission denied | Paste a code from Test labels into the scan box, or use a USB scanner. |
+| OCR slow the first time | The first read loads a 4 MB model | Read once before recording. If `apps/web/public/ocr` is empty, run `pnpm setup` (needs network). |
+| openFDA unreachable | No network | The app falls back to the recall fixtures and says so. |
+| The Today screen shows data from a previous take | State persists in `DATA_DIR` | **Reset demo** on Today. |
+| Port 4000 or 5173 is busy | Another run | `API_PORT=4530 pnpm dev:api` and `pnpm --filter @chimera-rx/web exec vite --port 5530`, with `API_URL=http://127.0.0.1:4530` and `CORS_ORIGINS=http://localhost:5530`. |
+| `pnpm install` complains about the lockfile | Wrong pnpm version | Use pnpm 12 (`packageManager` in `package.json`). |
+| Account locked | Five wrong passwords | Wait 15 minutes, or restart the API (counters are in memory). |
 
 ## Rehearse without a camera
 
 ```bash
-pnpm e2e
+pnpm dev          # one terminal
+pnpm e2e          # another; BASE=http://localhost:5173 by default, resets the data
 ```
 
-This drives the real UI in Chromium with a fake webcam and real OCR, and checks every step above from receiving to messages sent. It is not a test of a physical webcam, lighting or print quality.
+This drives the real UI in Chromium with a fake webcam and real OCR, from receiving to messages sent, plus AI agents, refills, DSCSA, register, transfers and cashier restrictions. The MFA check runs only when the API is started with `MFA=1`. It does not test a physical webcam, lighting or print quality. Run `npx playwright install chromium` once if the browser is missing.

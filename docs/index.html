@@ -6,34 +6,83 @@
 <title>Chimera Rx</title>
 <style>
   body { margin: 0; font: 16px/1.6 system-ui, sans-serif; background: #12101c; color: #ece9f7; }
-  main { max-width: 760px; margin: 0 auto; padding: 48px 20px; }
+  main { max-width: 800px; margin: 0 auto; padding: 48px 20px; }
   h1 { font-size: 40px; margin: 0 0 8px; }
+  h2 { margin-top: 36px; }
   a { color: #b9a8ff; }
   code, pre { background: #1d1a2e; border-radius: 6px; }
   code { padding: 2px 6px; }
   pre { padding: 14px 16px; overflow-x: auto; }
+  img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #3a3456; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #2b2644; vertical-align: top; }
   .notice { margin-top: 40px; padding: 12px 14px; border: 1px solid #3a3456; border-radius: 8px; font-size: 14px; }
 </style>
 </head>
 <body>
 <main>
   <h1>Chimera Rx</h1>
-  <p>Every lot accounted for, from the delivery dock to the patient's medicine cabinet. When the FDA recalls a lot, Chimera Rx finds the units on the shelf and the patients who took one home, and drafts the messages. A pharmacist approves every step.</p>
-  <h2>Try it</h2>
-  <pre>git clone &lt;this repo&gt;
-cd chimera-rx
-docker compose up
-# open http://localhost:4000</pre>
-  <p>Demo sign-in: <code>j.rivera@elmstreetrx.example</code> / <code>moonlight-rx-2026</code> (pharmacist). Then pick a scenario on the Today screen.</p>
-  <h2>Evidence</h2>
+  <p>A modern, agent-assisted pharmacy system. One ledger holds the lot, the patient and the prescription history. Agents watch it in the background, and a pharmacist decides. A recall is the sharpest proof: it turns a drug lot into the units on the shelf and the patients who took one home.</p>
+  <p>Kiroween 2026, Frankenstein category. Built with Kiro.</p>
+
+  <h2>The pharmacy runs on yesterday's software</h2>
   <ul>
-    <li><a href="evidence/accuracy.md">Lot extraction on 50 real openFDA recall records</a></li>
-    <li><a href="evidence/timing.md">Recall to affected-patient list timing and lot-capture rate</a></li>
-    <li><a href="KIRO_USAGE.md">How Kiro was used, and what was not verified</a></li>
-    <li><a href="DEMO.md">3-minute walkthrough</a></li>
+    <li>Wholesalers track a package by lot and serial. Dispensing software tracks the patient and the drug. Nothing links the two, so a recall means warning everyone or no one.</li>
+    <li>Recalls and prescriber changes still travel by fax and phone. Cold-chain and count checks are paper or a spreadsheet.</li>
+    <li>Alerts get overridden. In a study of community pharmacies, <a href="https://pubmed.ncbi.nlm.nih.gov/17381663/">289 of 510 relevant interaction alerts</a> were overridden with no action.</li>
+    <li>Staff are stretched: <a href="https://www.pharmacytimes.com/view/pharmacist-burnout-poses-challenges-to-patient-access">74.9 percent of 412 surveyed community pharmacists</a> reported burnout in at least one domain.</li>
+    <li>Package-level traceability is the rule under the DSCSA. Small dispensers have an <a href="https://www.fda.gov/drugs/drug-supply-chain-security-act-dscsa/exemptions-under-drug-supply-chain-security-act">FDA exemption to November 27, 2027</a>. Check your own status with the FDA.</li>
   </ul>
+  <p>Sources and the full case: <a href="../README.md">README</a> and <a href="MODERNIZATION.md">MODERNIZATION.md</a>.</p>
+  <img src="img/today.jpg" alt="Chimera Rx Today screen with a recall banner and the refills tile" width="1360" height="820">
+
+  <h2>Try it</h2>
+<pre>git clone &lt;this repo&gt;
+cd chimera-rx
+docker compose up        # then open http://localhost:4000
+
+# or, with Node 22.5+ and pnpm 12:
+pnpm install --frozen-lockfile
+pnpm setup
+pnpm dev                 # open http://localhost:5173</pre>
+  <p>Sign in as <code>j.rivera@elmstreetrx.example</code> with <code>moonlight-rx-2026</code> (pharmacist). Then pick a scenario on the Today screen. The Docker image build was not run on the machine that wrote this repo.</p>
+
+  <h2>Gaps we close</h2>
+  <table>
+    <tr><th>Old way</th><th>Chimera Rx way</th></tr>
+    <tr><td>A recall does not say who got the lot</td><td>Recall to shelf units and patients, quarantine, approved outreach</td></tr>
+    <tr><td>The lot is never captured</td><td>GS1 DataMatrix and OCR at receiving and at fill</td></tr>
+    <tr><td>Alerts come one at a time and get overridden</td><td>Rx Watcher rules and the Rx Guardian, a patient-history check that cites its evidence</td></tr>
+    <tr><td>Refills ignore recalls and adherence</td><td>Recall-aware refills, adherence, med sync</td></tr>
+    <tr><td>Traceability data is hard to exchange</td><td>EPCIS 2.0 export, sandbox verifier, suspect cases</td></tr>
+    <tr><td>Cold chain and counts on paper</td><td>Receiving temperature check (simulated data), witnessed Schedule II counts</td></tr>
+    <tr><td>Front store is separate</td><td>Register with verified prescriptions</td></tr>
+    <tr><td>Each store is an island</td><td>Two stores, transfers, mirrored recalls</td></tr>
+    <tr><td>Other systems cannot ask</td><td>REST, MCP and FHIR with scoped keys</td></tr>
+    <tr><td>Logs can be edited</td><td>Hash-chained audit log</td></tr>
+  </table>
+
+  <h2>Agents that work while you work</h2>
+  <p>Eight agents follow one rule: rules decide, the model explains, a gate checks the model, a pharmacist decides. Four can run in the background once a pharmacist switches them on. The Rx Guardian checks each new order against the patient's history and raises suggestions that a pharmacist accepts or dismisses. Amazon Bedrock is the default model provider, and you can bring your own.</p>
+  <img src="img/agents.jpg" alt="AI agents screen after running an agent" width="1360" height="820">
+
+  <h2>Documents</h2>
+  <ul>
+    <li><a href="DEMO.md">Demo guide: 3-minute and 8-minute paths</a></li>
+    <li><a href="ARCHITECTURE.md">Architecture</a></li>
+    <li><a href="MODERNIZATION.md">Modernization: the case by role, roadmap and 90-day pilot plan</a></li>
+    <li><a href="AGENTS.md">AI agents and providers</a></li>
+    <li><a href="SAFETY.md">Safety rules mapped to code and tests</a></li>
+    <li><a href="SECURITY.md">Security and patient data: what is encrypted and what is not</a></li>
+    <li><a href="DSCSA.md">DSCSA traceability with EPCIS</a> and <a href="REFILLS.md">refills</a></li>
+    <li><a href="KIRO_USAGE.md">How Kiro was used, and what was not verified</a></li>
+    <li><a href="evidence/accuracy.md">Lot extraction on 50 real openFDA recall records</a></li>
+    <li><a href="evidence/timing.md">Recall to affected-patient list timing</a></li>
+  </ul>
+
   <h2>Demo video</h2>
-  <p>Not recorded yet. The walkthrough above has the same script.</p>
+  <p>Not recorded yet. The demo script above has the same steps.</p>
+
   <p class="notice">Demo environment · synthetic data only · not for clinical use · not HIPAA-compliant · a pharmacist approves every message</p>
 </main>
 </body>

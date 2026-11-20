@@ -176,7 +176,7 @@ Do not mention patient names. Do not give dosing advice beyond what the findings
 
 async function llmExplain(ctx: Ctx, rx: RxRow, findings: Finding[], allergies: string, activeMeds: string[], band: string) {
   if (!ctx.llm) return null;
-  const quoted = JSON.stringify({ drug: rx.drug, directions: rx.directions, quantity: rx.qty, days_supply: rx.days_supply, allergy_classes: allergies, active_medicines: activeMeds, age_band: band });
+  const quoted = JSON.stringify({ drug: rx.drug, directions: rx.directions, quantity: rx.qty, days_supply: rx.days_supply, active_medicines: activeMeds, age_band: band });
   const user = `<order_data>${quoted}</order_data>\n<rule_findings>${JSON.stringify(findings.filter((f) => f.severity !== "pass").map((f) => ({ rule: f.rule, severity: f.severity, title: f.title })))}</rule_findings>`;
   const raw = await ctx.llm.complete(SYSTEM, user);
   const a = raw.indexOf("{"), b = raw.lastIndexOf("}");

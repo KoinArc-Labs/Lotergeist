@@ -48,12 +48,16 @@ export function openSession(ctx: Ctx, u: any, trusted: boolean, workstation: str
 export function actorFromToken(ctx: Ctx, token: string | undefined): { actor: Actor; user: SessionUser } | null {
   if (!token) return null;
   const s = ctx.db.get<any>("SELECT * FROM sessions WHERE token = ?", token);
-  if (!s || s.expires < ctx.now()) {
+  const now = ctx.now();
+  // Idle timeout: a session that has been quiet for sessionIdleMs is closed, whatever its absolute expiry.
+  const idle = ctx.cfg.sessionIdleMs > 0 && s && now - (s.last_seen ?? s.created) > ctx.cfg.sessionIdleMs;
+  if (!s || s.expires < now || idle) {
     if (s) ctx.db.run("DELETE FROM sessions WHERE token = ?", token);
     return null;
   }
   const u = ctx.db.get<any>("SELECT * FROM users WHERE id = ?", s.user_id);
   if (!u) return null;
+  if (now - (s.last_seen ?? 0) > 30_000) ctx.db.run("UPDATE sessions SET last_seen = ? WHERE token = ?", now, token);
   return { actor: { id: u.id, name: u.name, role: u.role, storeId: u.store_id, workstation: s.workstation }, user: toUser(u) };
 }
 

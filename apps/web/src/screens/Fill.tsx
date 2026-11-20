@@ -7,6 +7,7 @@ import { ScanPanel } from "../components/ScanPanel";
 import { btn, C, CheckList, ErrorBox, Footer, Icon, input, MONO, pill, when } from "../components/kit";
 import { PageHeader } from "../components/Shell";
 import { RxReview } from "../components/RxReview";
+import { RxSuggestions } from "../components/Suggestions";
 
 const STEPS = ["Review", "Scan", "Label", "Verify", "Pickup"];
 const FILLABLE = new Set(["clear", "approved"]);
@@ -64,6 +65,7 @@ export function Fill({ user }: { user: User }) {
                 <span style={{ fontSize: 13, color: C.dim }}>{q.drug.split(" · ")[0]}</span>
                 <span style={{ fontSize: 12, color: C.dimmer, fontFamily: MONO }}>Rx {q.rx} · {q.due}</span>
                 {q.status === "to_fill" && <span className={flag && q.flags ? "chip warn" : "label"} style={{ alignSelf: "flex-start" }}>Rx Watcher · {q.watcher}</span>}
+                {q.suggestions > 0 && <span className="chip warn" style={{ alignSelf: "flex-start" }}>Rx Guardian · {q.suggestions} suggestion{q.suggestions === 1 ? "" : "s"}</span>}
               </button>
             );
           })}
@@ -107,6 +109,7 @@ export function Fill({ user }: { user: User }) {
               </ol>
               <ErrorBox e={err} />
 
+              {x.status === "to_fill" && user.role !== "cashier" && <RxSuggestions rx={x.rx} user={user} />}
               {(x.status === "to_fill" || x.status === "replaced") && user.role !== "cashier" && <RxReview rx={x.rx} user={user} onNewRx={choose} />}
               {x.status === "to_fill" && FILLABLE.has(x.review) && (user.role === "cashier"
                 ? <div style={panel}><p style={{ margin: 0, color: C.dim }}>A technician or pharmacist scans the package for this prescription.</p></div>

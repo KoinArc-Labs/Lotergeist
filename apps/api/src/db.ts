@@ -2,6 +2,8 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
+import { CryptoError, cipherFor, ENVELOPE_PREFIX, type FieldCipher, type KeyProvider } from "./crypto";
+import { PROTECTED, rewriteProtected } from "./protect";
 
 // vite-node strips the "node:" prefix for sqlite, so load it through require.
 const require = createRequire(import.meta.url);
@@ -12,22 +14,69 @@ const clean = (p: unknown[]): Param[] => p.map((v) => (v === undefined ? null : 
 
 export class Db {
   readonly raw: DatabaseSync;
+  /** encrypts protected columns on write (see protect.ts) and opens every envelope on read */
+  readonly cipher: FieldCipher;
+  readonly keyProvider: KeyProvider;
   constructor(file: string) {
     if (file !== ":memory:") fs.mkdirSync(path.dirname(file), { recursive: true });
+    const k = cipherFor(file);
+    this.cipher = k.cipher;
+    this.keyProvider = k.provider;
     this.raw = new Sqlite(file);
     this.raw.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
     this.migrate();
+    this.assertKeyMatches();
+    this.encryptAtRest();
+  }
+
+  /**
+   * Fail closed on a wrong or lost key (REV-API): if stored values were sealed with a key this process does not hold, refuse to
+   * open the database. Otherwise the API would serve ciphertext as patient names and write new rows under a different key.
+   */
+  private assertKeyMatches() {
+    if (process.env.ALLOW_UNREADABLE_KEYS === "1") return; // the keys:status CLI may inspect a database whose key is missing
+    const missing = new Set<string>();
+    for (const [table, cols] of Object.entries(PROTECTED)) for (const col of cols) {
+      const ids = this.raw.prepare(`SELECT DISTINCT substr(${col}, ${ENVELOPE_PREFIX.length + 1}, 8) AS id FROM ${table} WHERE ${col} LIKE '${ENVELOPE_PREFIX}%'`).all() as { id: string }[];
+      for (const r of ids) if (!this.cipher.hasKey(r.id)) missing.add(r.id);
+    }
+    if (missing.size) throw new CryptoError("unknown_key", `The database holds values sealed with key id(s) ${[...missing].join(", ")} that this process does not have. Restore the original DATA_KEY or data/.keys folder; refusing to start so no value is shown as ciphertext or re-sealed under another key.`);
+  }
+
+  private open<T>(row: Record<string, any>): T {
+    const out: Record<string, any> = { ...row };
+    for (const k in out) { const v = out[k]; if (typeof v === "string" && v.startsWith(ENVELOPE_PREFIX)) out[k] = this.cipher.openLenient(v); }
+    return out as T;
+  }
+  /** Values bound for protected columns (and string literals written to them) are sealed before they reach SQLite. */
+  private seal(sql: string, p: Param[]): { sql: string; params: Param[] } {
+    const r = rewriteProtected(sql, (v) => this.cipher.seal(v));
+    if (!r.idx.length) return { sql: r.sql, params: p };
+    const out = [...p];
+    for (const i of r.idx) { const v = out[i]; if (v !== null && v !== undefined && v !== "") out[i] = this.cipher.seal(String(v)); }
+    return { sql: r.sql, params: out };
   }
 
   all<T = Record<string, any>>(sql: string, ...p: unknown[]): T[] {
-    return this.raw.prepare(sql).all(...clean(p)).map((r) => ({ ...r })) as T[];
+    return this.raw.prepare(sql).all(...clean(p)).map((r) => this.open<T>(r));
   }
   get<T = Record<string, any>>(sql: string, ...p: unknown[]): T | undefined {
     const r = this.raw.prepare(sql).get(...clean(p));
-    return r ? ({ ...r } as T) : undefined;
+    return r ? this.open<T>(r) : undefined;
   }
   run(sql: string, ...p: unknown[]) {
-    return this.raw.prepare(sql).run(...clean(p));
+    const s = this.seal(sql, clean(p));
+    return this.raw.prepare(s.sql).run(...s.params);
+  }
+
+  /** Encrypt plaintext left by an older build, once, when a file database opens. */
+  private encryptAtRest() {
+    for (const [table, cols] of Object.entries(PROTECTED)) for (const col of cols) {
+      const rows = this.raw.prepare(`SELECT rowid AS rid, ${col} AS v FROM ${table} WHERE ${col} IS NOT NULL AND ${col} <> '' AND ${col} NOT LIKE '${ENVELOPE_PREFIX}%'`).all() as { rid: number; v: string }[];
+      if (!rows.length) continue;
+      const upd = this.raw.prepare(`UPDATE ${table} SET ${col} = ? WHERE rowid = ?`);
+      this.tx(() => { for (const r of rows) upd.run(this.cipher.seal(String(r.v)), r.rid); });
+    }
   }
   private depth = 0;
   /** Transactions nest: an inner failure rolls back to its savepoint, an outer failure rolls back everything. */
@@ -163,11 +212,48 @@ export class Db {
       CREATE TABLE IF NOT EXISTS sale_lines (id INTEGER PRIMARY KEY AUTOINCREMENT, sale_id INTEGER, kind TEXT, upc TEXT, dispense_id INTEGER, name TEXT, qty INTEGER, price_cents INTEGER, rx TEXT, lot TEXT, serial TEXT);
       CREATE TABLE IF NOT EXISTS stock_decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, item_key TEXT, decision TEXT, by TEXT, at INTEGER, UNIQUE(kind, item_key));
       CREATE TABLE IF NOT EXISTS audio (id TEXT PRIMARY KEY, mime TEXT, bytes BLOB, voice TEXT, text TEXT, at INTEGER);
+
+      -- DSCSA and EPCIS trace (epcis.ts): sandbox verification log, suspect-product cases, advisory imported trace events
+      CREATE TABLE IF NOT EXISTS verification_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, by_name TEXT, gtin TEXT, serial TEXT, lot TEXT, expiry TEXT, result TEXT, reason TEXT,
+        response_json TEXT, package_id INTEGER, delivery_id TEXT
+      );
+      CREATE TABLE IF NOT EXISTS suspect_cases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, opened_at INTEGER, opened_by TEXT, source TEXT, verification_id INTEGER, recall_id TEXT, gtin TEXT, lot TEXT,
+        serial TEXT, package_id INTEGER, status TEXT, note TEXT, closed_at INTEGER, closed_by TEXT, close_note TEXT
+      );
+      -- agent records and drafts (agents/agent.ts creates them too): declared here so a file database can encrypt them when it opens
+      CREATE TABLE IF NOT EXISTS ai_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT, provider TEXT, model TEXT, started_at INTEGER, latency_ms INTEGER, mode TEXT,
+        input TEXT, rule_output TEXT, raw_output TEXT, gated_output TEXT, dropped TEXT, error TEXT, by_user TEXT
+      );
+      CREATE TABLE IF NOT EXISTS ai_drafts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER, recall_id TEXT, patient_id TEXT, channel TEXT, subject TEXT, body TEXT,
+        status TEXT DEFAULT 'draft', created_at INTEGER
+      );
+      -- Rx Guardian (agents/guardian.ts): suggestions from the patient-history checker, per-agent background settings, and the order state the checker last saw.
+      -- title, evidence, explanation and decision_reason are encrypted (protect.ts). The agent never changes an order; a pharmacist decides each suggestion.
+      CREATE TABLE IF NOT EXISTS suggestions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT, rx TEXT, severity TEXT, rule TEXT, skey TEXT, fp TEXT, title TEXT, evidence TEXT,
+        explanation TEXT, explained_by TEXT, status TEXT DEFAULT 'open', agent TEXT, ai_advisory INTEGER DEFAULT 1, source TEXT DEFAULT 'rule',
+        created_at INTEGER, decided_by TEXT, decided_at INTEGER, decision TEXT, decision_reason TEXT
+      );
+      CREATE INDEX IF NOT EXISTS ix_sugg_rx ON suggestions(rx, status);
+      CREATE TABLE IF NOT EXISTS agent_settings (
+        agent TEXT PRIMARY KEY, enabled INTEGER DEFAULT 0, enabled_by TEXT, enabled_at INTEGER, last_run_at INTEGER, next_run_at INTEGER,
+        last_status TEXT, last_mode TEXT, last_error TEXT, runs_day TEXT, runs_today INTEGER DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS guardian_state (rx TEXT PRIMARY KEY, fp TEXT, at INTEGER);
+      CREATE TABLE IF NOT EXISTS trace_imports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, by_name TEXT, event_id TEXT UNIQUE, kind TEXT, gtin TEXT, lot TEXT, serial TEXT, expiry TEXT,
+        event_at INTEGER, source_label TEXT, event_json TEXT
+      );
     `);
     const addColumn = (table: string, col: string, def: string) => {
       const have = (this.raw.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some((c) => c.name === col);
       if (!have) this.raw.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
     };
+    addColumn("sessions", "last_seen", "INTEGER");
     addColumn("audit", "prev_hash", "TEXT");
     addColumn("audit", "hash", "TEXT");
     addColumn("audit", "reason", "TEXT");

@@ -7,17 +7,32 @@ import { findDrug, INTERACTIONS, parseSig, type Drug } from "./drugs";
  * is written to the audit log with the reason the user gave.
  */
 
+/**
+ * Name, date of birth and phone are encrypted at rest with random IVs, so SQL cannot compare them. The search opens the
+ * patient rows in memory and filters there (no blind index): at pilot scale (thousands of patients) that is a few
+ * milliseconds, and it keeps substring search on names, which an HMAC index cannot do.
+ */
+const digitsOf = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
+
 export function searchPatients(ctx: Ctx, q: string) {
   const t = q.trim();
   if (t.length < 2) return { matches: [] };
   const digits = t.replace(/\D/g, "");
-  const dobIso = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
-  const rows = ctx.db.all<any>(
-    `SELECT DISTINCT p.id, p.name, p.dob FROM patients p LEFT JOIN prescriptions r ON r.patient_id = p.id
-     WHERE lower(p.name) LIKE lower(?) OR p.id = upper(?) OR p.dob = ? OR (? <> '' AND length(?) >= 4 AND replace(replace(replace(replace(p.phone,'(',''),')',''),'-',''),' ','') LIKE ?) OR (? <> '' AND r.rx LIKE ?)
-     ORDER BY p.name LIMIT 12`,
-    `%${t}%`, t, dobIso ? `${dobIso[3]}-${dobIso[1]!.padStart(2, "0")}-${dobIso[2]!.padStart(2, "0")}` : t, digits, digits, `%${digits}%`, digits, `${digits}%`);
+  const dm = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t);
+  const dobIso = dm ? `${dm[3]}-${dm[1]!.padStart(2, "0")}-${dm[2]!.padStart(2, "0")}` : t;
+  const byRx = new Set(digits ? ctx.db.all<{ patient_id: string }>("SELECT DISTINCT patient_id FROM prescriptions WHERE rx LIKE ?", `${digits}%`).map((r) => r.patient_id) : []);
+  const lower = t.toLowerCase();
+  const rows = ctx.db.all<{ id: string; name: string; dob: string; phone: string }>("SELECT id, name, dob, phone FROM patients")
+    .filter((p) => p.name.toLowerCase().includes(lower) || p.id === t.toUpperCase() || p.dob === dobIso || (digits.length >= 4 && digitsOf(p.phone).includes(digits)) || byRx.has(p.id))
+    .sort((a, b) => a.name.localeCompare(b.name)).slice(0, 12);
   return { matches: rows.map((r) => ({ id: r.id, name: r.name, dob: r.dob })) };
+}
+
+/** Caller-ID and STOP-reply lookup: the patient whose phone ends with these digits. */
+export function findPatientByPhone(ctx: Ctx, digits: string): { id: string; name: string } | undefined {
+  if (!digits) return undefined;
+  const p = ctx.db.all<{ id: string; name: string; phone: string }>("SELECT id, name, phone FROM patients").find((x) => digitsOf(x.phone).endsWith(digits));
+  return p ? { id: p.id, name: p.name } : undefined;
 }
 
 interface MedRow { date: string; drug: string; sig: string; prescriber: string; lot: string; status: string; daysSupply: number | null; autoRefill: boolean; refillsLeft: number; source: "history" | "fill" }
