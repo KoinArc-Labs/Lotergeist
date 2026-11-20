@@ -415,7 +415,7 @@ describe("provider runtime: keys stay in memory, are role-checked, audited, neve
   });
 
   it("Bedrock is the default when nothing is configured", () => {
-    expect(new AgentRuntime({}).settings()).toMatchObject({ provider: "bedrock", model: "anthropic.claude-3-5-haiku-20241022-v1:0" });
+    expect(new AgentRuntime({}).settings()).toMatchObject({ provider: "bedrock", model: "us.anthropic.claude-sonnet-5" });
     expect(new AgentRuntime({ LLM_PROVIDER: "none" }).client()).toBeNull();
   });
 });

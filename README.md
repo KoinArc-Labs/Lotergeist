@@ -292,7 +292,7 @@ Every variable is optional. Copy `.env.example` to `.env` to set them.
 | `SANDBOX_DELAY_MS` | `1500` | Delay of the sandbox SMS delivery receipts |
 | `OPENFDA_API_KEY` | none | Free key; without one the public rate limit applies |
 | `LLM_PROVIDER` | `bedrock` | `bedrock`, `anthropic`, `openai-compatible`, `mock`, `none` |
-| `AWS_REGION`, `AWS_PROFILE`, `BEDROCK_MODEL_ID` | `us-west-2`, none, `anthropic.claude-3-5-haiku-20241022-v1:0` | Bedrock |
+| `AWS_REGION`, `AWS_PROFILE`, `BEDROCK_MODEL_ID` | `us-east-1`, none, `us.anthropic.claude-sonnet-5` | Bedrock |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | none, `claude-3-5-haiku-latest` | Anthropic |
 | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL` | OpenAI URL, none, `gpt-4o-mini` | OpenAI-compatible; the key also serves OpenAI voice |
 | `VOICE_PROVIDER` | `auto` | Voicemail voice: ElevenLabs, OpenAI, macOS, then the browser |

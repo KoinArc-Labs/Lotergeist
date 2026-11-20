@@ -25,7 +25,7 @@ export interface ProviderSettings {
 }
 
 export const DEFAULT_MODELS: Record<ProviderId, string> = {
-  bedrock: "anthropic.claude-3-5-haiku-20241022-v1:0",
+  bedrock: "us.anthropic.claude-sonnet-5",
   anthropic: "claude-3-5-haiku-latest",
   "openai-compatible": "gpt-4o-mini",
   mock: "mock-1",
@@ -59,12 +59,19 @@ export class BedrockProvider implements ProviderClient {
     const sdk = await this.sdk();
     // The default AWS credential chain (env, AWS_PROFILE, SSO, container or instance role) is resolved by the SDK itself.
     this.client ??= new sdk.BedrockRuntimeClient({ region: this.region });
-    const out = await this.client.send(new sdk.ConverseCommand({
+    const send = (inferenceConfig: Record<string, number>) => this.client!.send(new sdk.ConverseCommand({
       modelId: this.model,
       system: [{ text: system }],
       messages: [{ role: "user", content: [{ text: user }] }],
-      inferenceConfig: { temperature: 0, maxTokens: 1024 }
+      inferenceConfig
     }), { abortSignal: AbortSignal.timeout(TIMEOUT_MS) });
+    let out;
+    try { out = await send({ temperature: 0, maxTokens: 1024 }); }
+    catch (e) {
+      // Newer models reject `temperature`; ask again without it. Any other error is passed up unchanged.
+      if (!/temperature/i.test(String((e as Error)?.message))) throw e;
+      out = await send({ maxTokens: 1024 });
+    }
     return ((out?.output?.message?.content ?? []) as { text?: string }[]).map((c) => c.text ?? "").join("");
   }
 }
@@ -262,7 +269,7 @@ export class AgentRuntime {
     this.s = {
       provider,
       model: model || DEFAULT_MODELS[provider],
-      region: env.AWS_REGION || env.AWS_DEFAULT_REGION || "us-west-2",
+      region: env.AWS_REGION || env.AWS_DEFAULT_REGION || "us-east-1",
       baseUrl: env.OPENAI_BASE_URL || "https://api.openai.com/v1"
     };
     if (env.ANTHROPIC_API_KEY) this.keys.set("anthropic", { key: env.ANTHROPIC_API_KEY, source: "environment" });
