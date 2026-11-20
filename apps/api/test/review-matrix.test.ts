@@ -36,7 +36,8 @@ const ALLOW: Record<string, R[]> = {
   "/api/rx/:rx/decision": ["pharmacist"],
   "/api/recalls/:id/preview": ["technician", "pharmacist"], // merges a patient's fields: not for cashier or admin
   "/api/agents/provider": ["admin", "pharmacist"], "/api/agents/provider/test": ["admin", "pharmacist"],
-  "/api/agents/:id/run": ["technician", "admin", "pharmacist"] // coroner
+  "/api/agents/:id/run": ["technician", "admin", "pharmacist"], // coroner
+  "/api/agents/:id/enable": ["admin", "pharmacist"], "/api/agents/:id/disable": ["admin", "pharmacist"] // background mode (Rx Guardian)
 };
 
 function sourceRoutes(): { method: string; url: string }[] {

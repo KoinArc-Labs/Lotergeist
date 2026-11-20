@@ -16,7 +16,7 @@ import { decide, listMessages, proposeFix, respond } from "./prescriber";
 import { addWebhook, deliveries, WEBHOOK_EVENTS } from "./webhooks";
 import { ALL_SCOPES, apiActivity, createPartner, listPartners, rotateSecret, SCOPES, securityPosture, seedPartners, updatePartner, type Scope } from "./integrations";
 import { registerPartnerApi } from "./partner-api";
-import { registerAgentRoutes } from "./agents";
+import { registerAgentRoutes, listSuggestions } from "./agents";
 import { registerEpcisRoutes } from "./epcis";
 import { registerRefillRoutes } from "./refills-routes";
 import { findPatientByPhone, patientProfile, refillSync, searchPatients } from "./patients";
@@ -180,7 +180,14 @@ export async function buildApp(ctx: Ctx): Promise<FastifyInstance> {
   });
 
   // ---- fill & pickup
-  app.get("/api/rx", async (req) => { only(req, "cashier", "technician", "pharmacist"); return fillQueue(ctx); }); // admin has no job in the fill queue (patient names)
+  app.get("/api/rx", async (req) => {
+    only(req, "cashier", "technician", "pharmacist"); // admin has no job in the fill queue (patient names)
+    const rows = fillQueue(ctx);
+    // Rx Guardian: an order with open suggestions carries their count and the worst severity. A cashier sees none of it.
+    if (A(req).role === "cashier") return rows;
+    const open = listSuggestions(ctx, { status: "open", limit: 500 });
+    return rows.map((r) => { const mine = open.filter((s) => s.rxNumber === r.rx); return { ...r, suggestions: mine.length, suggestionSeverity: mine[0]?.severity ?? null }; });
+  });
   app.get("/api/rx/:rx", async (req) => { only(req, "cashier", "technician", "pharmacist"); return rxDetail(ctx, A(req), (req.params as { rx: string }).rx); });
   // ---- Rx Watcher and the prescriber channel
   const rxp = (req: FastifyRequest) => (req.params as { rx: string }).rx;

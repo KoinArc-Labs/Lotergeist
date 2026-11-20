@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { get, type User } from "../lib/api";
 import { C, Footer, Icon, MONO, pill, TONES } from "../components/kit";
 import { mainStyle, PageHeader } from "../components/Shell";
+import { SuggestionsCard } from "../components/Suggestions";
 
 const EVENT_TONE: Record<string, string> = { Sold: "green", Filled: "violet", Received: "cold", Shelved: "cold", Quarantined: "red", Returned: "orange", Adjusted: "amber", Moved: "violet", Released: "green" };
 const TAG_TONE: Record<string, string> = { orange: "orange", green: "green", violet: "violet", red: "red" };
@@ -77,6 +78,8 @@ export function Today({ user }: { user: User }) {
             {Icon.chevron()}
           </Link>
         )}
+
+        {t?.suggestions && <SuggestionsCard summary={t.suggestions} />}
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 16 }}>
           {(t?.kpis ?? []).map((k: any) => (

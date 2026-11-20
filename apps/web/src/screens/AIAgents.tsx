@@ -1,15 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { get, msg, post, type User } from "../lib/api";
 import { btn, C, ErrorBox, Footer, input, MONO, Pill } from "../components/kit";
 import { mainStyle, PageHeader } from "../components/Shell";
+import { SuggestionCard, useSuggestions } from "../components/Suggestions";
 
 interface ProviderInfo {
   provider: string; providerLabel: string; model: string; region: string; baseUrl: string; keySet: boolean; keyHint: string | null; keySource: string; credentials: string;
   providers: { id: string; label: string; defaultModel: string; needsKey: boolean }[]; unavailableUntil: number | null;
 }
-interface AgentInfo { id: string; name: string; purpose: string; guardrails: string[]; canRun: boolean }
-interface Overview { label: string; provider: ProviderInfo; canConfigure: boolean; agents: AgentInfo[] }
+interface BgStatus { id: string; trigger: string; enabled: boolean; enabledBy: string | null; lastRunAt: number | null; nextRunAt: number | null; runsToday: number; lastStatus: "ok" | "error" | null; lastMode: "ai" | "rules only" | null; lastError: string | null; running: boolean }
+interface AgentInfo { id: string; name: string; purpose: string; guardrails: string[]; canRun: boolean; background: BgStatus | null }
+interface Overview { label: string; provider: ProviderInfo; canConfigure: boolean; agents: AgentInfo[]; background: { allowed: boolean; on: number; canSwitch: boolean; canRunNow: boolean } }
 interface Dropped { what: string; why: string }
 interface Run {
   id: number; agentId: string; provider: string; model: string; startedAt: number; latencyMs: number; mode: "ai" | "rules only"; input: string;
@@ -40,6 +43,12 @@ export function AIAgents({ user }: { user: User }) {
     } catch (e) { setErr(msg(e)); } finally { setBusy(""); }
   };
   const o = ov.data;
+  const [sp, setSp] = useSearchParams();
+  const tab = sp.get("tab") === "suggestions" ? "suggestions" : "agents";
+  const canSee = user.role === "pharmacist" || user.role === "technician";
+  const open = useSuggestions("?status=open", canSee);
+  const all = useSuggestions("?status=all", canSee && tab === "suggestions");
+  const [filter, setFilter] = useState<"open" | "decided">("open");
   const setIn = (id: string, k: string, v: string) => setInputs((s) => ({ ...s, [id]: { ...(s[id] ?? {}), [k]: v } }));
   const editor = (a: AgentInfo): ReactNode => {
     const f = (k: string, label: string, ph: string, area = false) => (
@@ -62,7 +71,27 @@ export function AIAgents({ user }: { user: User }) {
         <div role="note" style={{ padding: "12px 16px", borderRadius: 10, background: "var(--accent-soft)", fontSize: 14 }}>
           <strong>{o?.label ?? "AI advisory, a pharmacist decides"}.</strong> Every agent runs its deterministic rules first. The model can add an explanation or a lower-confidence note; it cannot remove a rule hit, invent a lot, or send anything. With no provider ("none") or when a call fails, the agent shows "rules only".
         </div>
+        <div role="tablist" aria-label="AI agents sections" style={{ display: "flex", gap: 8 }}>
+          <button role="tab" aria-selected={tab === "agents"} onClick={() => setSp({})} style={btn(tab === "agents" ? "primary" : "ghost", { minHeight: 44 })}>Agents{o ? ` · ${o.background.on} on` : ""}</button>
+          {canSee && <button role="tab" aria-selected={tab === "suggestions"} onClick={() => setSp({ tab: "suggestions" })} style={btn(tab === "suggestions" ? "primary" : "ghost", { minHeight: 44 })}>Suggestions{open.data ? ` · ${open.data.summary.open}` : ""}</button>}
+        </div>
         <ErrorBox e={err} />
+        {tab === "suggestions" && canSee && (
+          <section aria-label="Suggestions" style={card}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
+              <h2 style={{ margin: 0, fontSize: 16 }}>Rx Guardian suggestions</h2>
+              <span style={{ display: "flex", gap: 6 }}>
+                <button aria-pressed={filter === "open"} onClick={() => setFilter("open")} style={btn(filter === "open" ? "primary" : "ghost", { minHeight: 40 })}>Open</button>
+                <button aria-pressed={filter === "decided"} onClick={() => setFilter("decided")} style={btn(filter === "decided" ? "primary" : "ghost", { minHeight: 40 })}>Decided</button>
+              </span>
+            </div>
+            <p style={{ margin: 0, fontSize: 13, color: C.dim }}>Found by checking each new or changed order against the patient's history. The agent never changes an order. {all.data?.canDecide ? "You decide each one." : "A pharmacist decides; you can read the evidence."}</p>
+            {(all.data?.suggestions ?? []).filter((x) => (filter === "open" ? x.status === "open" : x.status !== "open")).map((x) => <SuggestionCard key={x.id} s={x} canDecide={all.data?.canDecide ?? false} />)}
+            {all.data && all.data.suggestions.filter((x) => (filter === "open" ? x.status === "open" : x.status !== "open")).length === 0 && <p style={{ margin: 0, fontSize: 14, color: C.dim }}>{filter === "open" ? "Nothing open. Switch on Rx Guardian on the Agents tab, or press Run now." : "Nothing decided yet."}</p>}
+          </section>
+        )}
+        {tab === "agents" && <>
+        {o && !o.background.allowed && <div role="status" style={{ padding: "10px 14px", borderRadius: 10, background: C.warnSoft, fontSize: 14 }}>Background mode is paused by a server setting (AGENTS_BACKGROUND=0). Agents still run when a pharmacist presses Run now.</div>}
         {o && <ProviderCard info={o.provider} canConfigure={o.canConfigure} onChanged={() => { void qc.invalidateQueries({ queryKey: ["agents"] }); }} />}
 
         <section aria-label="Agents" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
@@ -70,13 +99,14 @@ export function AIAgents({ user }: { user: User }) {
             <article key={a.id} style={card} aria-label={a.name}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
                 <h2 style={{ margin: 0, fontSize: 16 }}>{a.name}</h2>
-                <Pill tone={a.canRun ? "violet" : "gray"}>{a.canRun ? "Read-only" : `Not for a ${user.role}`}</Pill>
+                <Pill tone={a.canRun ? "violet" : "gray"}>{a.canRun ? (a.background ? "Advisory" : "Read-only") : `Not for a ${user.role}`}</Pill>
               </div>
               <p style={{ margin: 0, fontSize: 14, color: C.dim, lineHeight: 1.5 }}>{a.purpose}</p>
               <details>
                 <summary style={{ cursor: "pointer", fontSize: 13, color: C.violet2 }}>Guardrails</summary>
                 <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 13, lineHeight: 1.5, color: C.ink2 }}>{a.guardrails.map((g) => <li key={g}>{g}</li>)}</ul>
               </details>
+              {a.background && o && <BackgroundRow a={a} bg={a.background} o={o} onError={setErr} />}
               {a.canRun && (
                 <>
                   <button disabled={!!busy} onClick={() => run(a, true)} style={btn("primary", { minHeight: 44 })}>{busy === a.id ? "Running…" : "Run with sample input"}</button>
@@ -105,9 +135,41 @@ export function AIAgents({ user }: { user: User }) {
             </button>
           ))}
         </section>
+        </>}
         <Footer />
       </main>
     </>
+  );
+}
+
+const stamp = (ms: number | null) => (ms ? `${new Date(ms).toISOString().slice(11, 16)} UTC` : "not yet");
+
+/** Background mode for one agent: the switch, when it last ran and runs next, how many runs today, and Run now. */
+function BackgroundRow({ a, bg, o, onError }: { a: AgentInfo; bg: BgStatus; o: Overview; onError: (e: string) => void }) {
+  const qc = useQueryClient();
+  const refresh = () => ["agents", "suggestions", "today", "agent-runs", "rxq"].forEach((k) => void qc.invalidateQueries({ queryKey: [k] }));
+  const toggle = useMutation({ mutationFn: () => post(`/api/agents/${a.id}/${bg.enabled ? "disable" : "enable"}`), onSuccess: () => { onError(""); refresh(); }, onError: (e) => onError(msg(e)) });
+  const now = useMutation({ mutationFn: () => post(`/api/agents/${a.id}/run-now`), onSuccess: () => { onError(""); refresh(); }, onError: (e) => onError(msg(e)) });
+  return (
+    <div role="group" aria-label={`${a.name} background mode`} style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, borderRadius: 10, background: C.well, border: `1px solid ${bg.enabled ? "var(--ok)" : C.line}` }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "space-between" }}>
+        <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <strong style={{ fontSize: 14 }}>Background mode</strong>
+          <Pill tone={bg.enabled ? "green" : "gray"}>{bg.enabled ? "On" : "Off"}</Pill>
+          {bg.running && <Pill tone="violet">Running</Pill>}
+        </span>
+        <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button role="switch" aria-checked={bg.enabled} disabled={!o.background.canSwitch || toggle.isPending} onClick={() => toggle.mutate()} style={btn(bg.enabled ? "ghost" : "primary", { minHeight: 44 })}>{bg.enabled ? "Switch off" : "Switch on"}</button>
+          {o.background.canRunNow && <button disabled={now.isPending || bg.running} onClick={() => now.mutate()} style={btn("ghost", { minHeight: 44 })}>{now.isPending ? "Running…" : "Run now"}</button>}
+        </span>
+      </div>
+      <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, fontSize: 13 }}>
+        <div><dt style={{ color: C.dimmer, fontSize: 12 }}>Last run</dt><dd style={{ margin: 0 }}>{stamp(bg.lastRunAt)}</dd></div>
+        <div><dt style={{ color: C.dimmer, fontSize: 12 }}>Next run</dt><dd style={{ margin: 0 }}>{bg.enabled ? (o.background.allowed ? stamp(bg.nextRunAt) : "paused") : "off"}</dd></div>
+        <div><dt style={{ color: C.dimmer, fontSize: 12 }}>Runs today</dt><dd style={{ margin: 0 }}>{bg.runsToday}</dd></div>
+      </dl>
+      <span style={{ fontSize: 12, color: C.dimmer }}>Runs: {bg.trigger}.{bg.lastMode === "rules only" ? " Last run used rules only." : ""}{bg.lastStatus === "error" ? ` Last run failed: ${bg.lastError ?? "unknown"}.` : ""}{!o.background.canSwitch ? " A pharmacist or admin switches it." : ""}</span>
+    </div>
   );
 }
 

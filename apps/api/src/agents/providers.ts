@@ -127,6 +127,7 @@ export class MockProvider implements ProviderClient {
       case "night-watch": return mockNightWatch(data);
       case "stock-advisor": return mockStock(data);
       case "copilot": return mockCopilot(data);
+      case "rx-guardian": return mockGuardian(user);
       case "stock-line": return `${String(user).split(". ")[0]!.slice(0, 200)}. Check it against what is on the shelf.`;
       default: return "OK";
     }
@@ -140,6 +141,16 @@ function safeJson(s: string): any {
   const a = s.indexOf("{"), b = s.lastIndexOf("}");
   if (a < 0 || b <= a) return {};
   try { return JSON.parse(s.slice(a, b + 1)); } catch { return {}; }
+}
+
+/** The mock Guardian explains each hit from its own facts (no new numbers) and adds no note. */
+function mockGuardian(user: string): string {
+  let hits: { id: string; rule: string; severity: string; facts: string[] }[] = [];
+  try { hits = JSON.parse(/<hits>([\s\S]*?)<\/hits>/.exec(user)?.[1] ?? "[]"); } catch { hits = []; }
+  return JSON.stringify({
+    explanations: hits.map((h) => ({ id: h.id, text: `${h.rule.replace(/-/g, " ")}: ${(h.facts ?? []).slice(0, 2).join(" ")}`.slice(0, 500) })),
+    note: null
+  });
 }
 
 function mockCoroner(d: any): string {

@@ -61,6 +61,7 @@ Do the 3-minute path, then add these in order. Each scenario resets the data, so
 | 5:20 | Refills | Scenario **Recall-aware refill**, then look up `D-0611-2026`. Priya's row turns red and links to the recall. Draft reminders: the recalled row gets none. |
 | 6:00 | Transfers | Move a package to Store 2. Both audit logs record it. Sign in as `s.okoro@birchavenuerx.example` to see it arrive and the mirrored recall. |
 | 6:40 | Register | Sell an over-the-counter item and one verified prescription. A recalled lot is blocked by name. |
+| 6:50 | Today | Scenario **Agent catches it**: stay on Today. Rx Guardian is on in the background; within about a minute the Suggestions card shows late insulin fills, a GLP-1 pen interaction and a recalled lot in the history (or press Run now on AI agents). Open the order, read the evidence, accept one: the order goes on hold. The agent never changes an order. |
 | 7:10 | Roles and audit | Sign in as the cashier: no allergies or birth dates, no outbox. Then `GET /api/audit/verify` returns the chain as intact. |
 | 7:40 | Security | Open `docs/SECURITY.md`: what is encrypted, how the key rotates, what is not covered. |
 

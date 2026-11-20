@@ -319,6 +319,8 @@ export function seedDatabase(db: Db, cfg: Config, now = Date.now()) {
     db.run("INSERT INTO meta (key, value) VALUES ('seeded', ?)", String(now));
     db.run("INSERT INTO meta (key, value) VALUES ('seed_version', ?)", SEED_VERSION);
     db.run("INSERT INTO meta (key, value) VALUES ('last_sync', ?)", String(now - 2 * 60_000));
+    // Background agents: with the demo on, the Rx Guardian starts switched on so a judge sees it work without setup. A pharmacist can switch it off.
+    if (cfg.demo) db.run("INSERT OR REPLACE INTO agent_settings (agent, enabled, enabled_by, enabled_at, next_run_at, runs_today) VALUES ('rx-guardian', 1, 'demo seed', ?, ?, 0)", now, now);
   });
   if (cfg.dataset === "large") generateHistory(db);
   return true;

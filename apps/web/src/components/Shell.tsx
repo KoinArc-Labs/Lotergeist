@@ -48,6 +48,9 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
   const queue = useQuery({ queryKey: ["rxq"], queryFn: () => get<any[]>("/api/rx"), refetchInterval: 15000, enabled: user.role === "pharmacist" || user.role === "technician" });
   const badges = today.data?.badges ?? { receiving: 0, recalls: 0 };
   const flagged = (queue.data ?? []).filter((r) => r.status === "to_fill" && (r.review === "pending" || r.review === "on_hold")).length;
+  // Background agents switched on (the same query the AI agents screen uses).
+  const agentsQ = useQuery({ queryKey: ["agents"], queryFn: () => get<{ background?: { on: number; allowed: boolean } }>("/api/agents"), refetchInterval: 15000, enabled: user.role !== "cashier" });
+  const agentsOn = agentsQ.data?.background?.on ?? 0;
   const me = useQuery({ queryKey: ["me"], queryFn: () => get<{ store?: { name: string } }>("/api/me"), staleTime: 60_000 });
   const storeName = (me.data?.store?.name ?? "Elm Street Pharmacy · Store 7").replace(" Pharmacy", "");
   const [menu, setMenu] = useState(false);
@@ -84,6 +87,7 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
           {user.role !== "cashier" && <>
             <span className="nav-label">AI</span>
             {item("/agents", "AI agents", <AgentsIcon />)}
+            <span role="status" aria-label={`Background agents on: ${agentsOn}`} style={{ fontSize: 12, color: agentsOn ? "var(--ok-text)" : "var(--subtle)", padding: "0 14px 6px 46px" }}>Agents on: {agentsOn}{agentsQ.data?.background && !agentsQ.data.background.allowed ? " (paused by server)" : ""}</span>
           </>}
           {(user.role === "admin" || user.role === "pharmacist") && <>
             <span className="nav-label">Admin</span>

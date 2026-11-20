@@ -6,6 +6,8 @@ import { monthEnd, ndcFromAny } from "./domain";
 import { listDeliveries } from "./receiving";
 import { listLots } from "./inventory";
 import { lookupRecall, recallImpact } from "./recall";
+import { suggestionSummary } from "./agents/guardian";
+import { agentsOn } from "./agents/background";
 
 const hhmm = (ms: number) => new Date(ms).toISOString().slice(11, 16);
 
@@ -84,6 +86,9 @@ export function todayView(ctx: Ctx, actor: Actor) {
   return {
     greeting: { title: `Good ${hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"}, ${first}`, line: `${nowD.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" })} · ${shift} · last sync ${Math.max(0, Math.round((now - sync) / 60_000))} min ago` },
     banner, kpis, tasks: tasks.slice(0, 5), openTasks: tasks.length, expiring, feed,
+    // Rx Guardian: counts and the top three open suggestions. A pharmacist decides; a technician sees them; a cashier and an admin get nothing.
+    suggestions: actor.role === "pharmacist" || actor.role === "technician" ? { ...suggestionSummary(ctx), canDecide: actor.role === "pharmacist" } : null,
+    agentsOn: agentsOn(ctx),
     badges: { receiving: deliveries.length, recalls: ctx.db.get<{ n: number }>("SELECT count(*) AS n FROM recalls WHERE status <> 'closed'")!.n }
   };
 }

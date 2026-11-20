@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { AgentRuntime, runAgent } from "./agents";
+import { AgentRuntime, backgroundTick, runAgent } from "./agents";
 import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import type { Ctx } from "./core";
@@ -38,6 +38,11 @@ console.log(`Chimera Rx API on http://localhost:${cfg.port}  (notifier=${ctx.not
 // Rx Watcher: review every new order at start-up, then every minute.
 void everyStore(() => reviewPending(ctx).then((n) => { if (n) console.log(`Rx Watcher reviewed ${n} new order(s)`); }));
 cron.schedule("* * * * *", () => { void everyStore(() => reviewPending(ctx)).catch(() => undefined); });
+// Background agents (agents/background.ts): every enabled agent runs on its trigger. The tick is never awaited by a request and never throws.
+// AGENTS_BACKGROUND=0 turns it off. The Rx Guardian looks at new or changed orders on every tick.
+const backgroundRound = () => everyStore(() => backgroundTick(ctx)).catch(() => undefined);
+setTimeout(() => { void backgroundRound(); }, 8000).unref();
+cron.schedule("* * * * *", () => { void backgroundRound(); });
 // Outreach agent: retries due voicemail attempts inside the calling window, every 5 minutes.
 cron.schedule("*/5 * * * *", () => { void everyStore(() => runOutreachAgent(ctx)).catch(() => undefined); });
 

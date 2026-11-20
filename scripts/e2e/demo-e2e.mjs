@@ -295,6 +295,49 @@ try {
   await p.waitForSelector("text=Recorded in both audit logs", { timeout: 8000 }).then(() => check("two-store transfer is recorded in both audit logs", true), () => check("two-store transfer is recorded in both audit logs", false));
   await p.screenshot({ path: path.join(SHOTS, "transfers.png") });
 
+  // 13b. BACKGROUND AGENTS: enable the Guardian, start "Agent catches it", see the Today card and the Fill badge, accept one, see the order on hold ------
+  {
+    const ph = await session("j.rivera");
+    const q = ph.page;
+    await q.goto(`${BASE}/#/agents`);
+    const group = q.getByRole("group", { name: "Rx Guardian background mode" });
+    await group.waitFor({ timeout: 10000 });
+    if ((await group.getByRole("switch").getAttribute("aria-checked")) !== "true") await group.getByRole("switch").click();
+    await group.getByText("On", { exact: true }).waitFor({ timeout: 8000 }).then(() => check("Rx Guardian background mode is switched on", true), () => check("Rx Guardian background mode is switched on", false));
+    check("sidebar shows how many agents are on", /Agents on: [1-9]/.test(await q.locator("nav[aria-label='Main']").innerText()));
+    await q.screenshot({ path: path.join(SHOTS, "agents-background.png"), fullPage: true });
+
+    const started = await ph.ctx.request.post(`${BASE}/api/demo/scenarios/agent-catches-it`, { data: {} });
+    check("scenario 'Agent catches it' starts", started.ok(), String(started.status()));
+    await apiLogin(ph.ctx, "j.rivera"); // the reset signs everyone out
+    await q.goto(`${BASE}/#/`);
+    const card = q.getByRole("region", { name: "Rx Guardian suggestions" }).or(q.locator("section[aria-labelledby=sugg]"));
+    // The background loop picks the new order up within about a minute. If it has not by then, press Run now like a judge would.
+    let seen = await q.locator("section[aria-labelledby=sugg] li").first().waitFor({ timeout: 75000 }).then(() => true, () => false);
+    check("the Guardian raises suggestions in the background (no button pressed)", seen);
+    if (!seen) {
+      await q.goto(`${BASE}/#/agents`);
+      await q.getByRole("group", { name: "Rx Guardian background mode" }).getByRole("button", { name: "Run now" }).click();
+      await q.goto(`${BASE}/#/`);
+      seen = await q.locator("section[aria-labelledby=sugg] li").first().waitFor({ timeout: 20000 }).then(() => true, () => false);
+    }
+    check("Today shows the Suggestions card with the top items", seen && (await card.first().innerText()).includes("Needs review"));
+    await q.screenshot({ path: path.join(SHOTS, "today-suggestions.png"), fullPage: true });
+
+    await q.goto(`${BASE}/#/fill?rx=0072301`);
+    await q.waitForSelector("text=/Rx Guardian · \\d+ suggestion/", { timeout: 15000 }).then(() => check("Fill & pickup shows the Guardian badge on the order", true), () => check("Fill & pickup shows the Guardian badge on the order", false));
+    check("the evidence is inline on the order", (await q.locator("main").innerText()).includes("Evidence from the history"));
+    await q.screenshot({ path: path.join(SHOTS, "fill-suggestions.png"), fullPage: true });
+    await q.getByRole("button", { name: "Accept: hold the order" }).first().click();
+    await q.getByRole("button", { name: "Put order on hold" }).click();
+    await q.waitForTimeout(1500);
+    const rxNow = await (await ph.ctx.request.get(`${BASE}/api/rx/0072301`)).json();
+    check("accepting a suggestion puts the order on hold", rxNow.review === "on_hold", rxNow.review);
+    const sugg = await (await ph.ctx.request.get(`${BASE}/api/suggestions?status=all&rx=0072301`)).json();
+    check("the decision is recorded on the suggestion", sugg.suggestions.some((x) => x.status === "accepted" && x.decidedBy));
+    await ph.ctx.close();
+  }
+
   // 14. MFA sign-in through the real form (only when the API runs with MFA=1) -------------------------
   {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });

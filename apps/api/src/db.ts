@@ -231,6 +231,19 @@ export class Db {
         id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER, recall_id TEXT, patient_id TEXT, channel TEXT, subject TEXT, body TEXT,
         status TEXT DEFAULT 'draft', created_at INTEGER
       );
+      -- Rx Guardian (agents/guardian.ts): suggestions from the patient-history checker, per-agent background settings, and the order state the checker last saw.
+      -- title, evidence, explanation and decision_reason are encrypted (protect.ts). The agent never changes an order; a pharmacist decides each suggestion.
+      CREATE TABLE IF NOT EXISTS suggestions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, patient_id TEXT, rx TEXT, severity TEXT, rule TEXT, skey TEXT, fp TEXT, title TEXT, evidence TEXT,
+        explanation TEXT, explained_by TEXT, status TEXT DEFAULT 'open', agent TEXT, ai_advisory INTEGER DEFAULT 1, source TEXT DEFAULT 'rule',
+        created_at INTEGER, decided_by TEXT, decided_at INTEGER, decision TEXT, decision_reason TEXT
+      );
+      CREATE INDEX IF NOT EXISTS ix_sugg_rx ON suggestions(rx, status);
+      CREATE TABLE IF NOT EXISTS agent_settings (
+        agent TEXT PRIMARY KEY, enabled INTEGER DEFAULT 0, enabled_by TEXT, enabled_at INTEGER, last_run_at INTEGER, next_run_at INTEGER,
+        last_status TEXT, last_mode TEXT, last_error TEXT, runs_day TEXT, runs_today INTEGER DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS guardian_state (rx TEXT PRIMARY KEY, fp TEXT, at INTEGER);
       CREATE TABLE IF NOT EXISTS trace_imports (
         id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, by_name TEXT, event_id TEXT UNIQUE, kind TEXT, gtin TEXT, lot TEXT, serial TEXT, expiry TEXT,
         event_at INTEGER, source_label TEXT, event_json TEXT

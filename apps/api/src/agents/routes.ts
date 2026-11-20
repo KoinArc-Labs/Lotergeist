@@ -8,9 +8,12 @@ import "./nightwatch";
 import "./stock";
 import "./copilot";
 import "./refills";
+import "./guardian";
 import { ADVISORY_LABEL, allAgents, canRun, getAgent, listRuns, runAgent, sampleFor } from "./agent";
 import { draftQueue } from "./outreach";
 import { PROVIDER_IDS, runtimeOf } from "./providers";
+import { agentsOn, backgroundAllowed, backgroundStatus, runNow, setEnabled } from "./background";
+import { acceptSuggestion, dismissSuggestion, listSuggestions, requestChange, suggestionSummary } from "./guardian";
 
 /** Who may change the provider: the pharmacist (in charge of the store) and the admin. */
 const CONFIGURE = ["pharmacist", "admin"] as const;
@@ -45,8 +48,39 @@ export function registerAgentRoutes(app: FastifyInstance, ctx: Ctx) {
       label: ADVISORY_LABEL,
       provider: rt().settings(),
       canConfigure: (CONFIGURE as readonly string[]).includes(role),
-      agents: allAgents().map((a) => ({ id: a.id, name: a.name, purpose: a.purpose, guardrails: a.guardrails, roles: a.roles, canRun: canRun(a, role), readOnly: true }))
+      background: { allowed: backgroundAllowed(), on: agentsOn(ctx), canSwitch: (CONFIGURE as readonly string[]).includes(role), canRunNow: role === "pharmacist" },
+      agents: allAgents().map((a) => ({ id: a.id, name: a.name, purpose: a.purpose, guardrails: a.guardrails, roles: a.roles, canRun: canRun(a, role), readOnly: true, background: backgroundStatus(ctx).find((s) => s.id === a.id) ?? null }))
     };
+  });
+
+  // ---- background mode: switch an agent on or off, or run it now (a pharmacist or admin switches; only a pharmacist runs now)
+  const agentId = (req: FastifyRequest) => z.object({ id: z.string().max(40) }).parse(req.params).id;
+  app.post("/api/agents/:id/enable", async (req) => ({ status: setEnabled(ctx, A(req), agentId(req), true) }));
+  app.post("/api/agents/:id/disable", async (req) => ({ status: setEnabled(ctx, A(req), agentId(req), false) }));
+  app.post("/api/agents/:id/run-now", async (req) => ({ status: await runNow(ctx, A(req), agentId(req)), summary: suggestionSummary(ctx) }));
+
+  // ---- Rx Guardian suggestions: a pharmacist decides; a technician can read; a cashier and an admin cannot
+  const SEE = ["pharmacist", "technician"] as const;
+  app.get("/api/suggestions", async (req) => {
+    need(req, SEE);
+    const q = z.object({ status: z.enum(["open", "accepted", "dismissed", "resolved", "all"]).optional(), rx: z.string().max(20).optional(), patient: z.string().max(12).optional() }).parse(req.query);
+    return { label: ADVISORY_LABEL, canDecide: A(req).role === "pharmacist", summary: suggestionSummary(ctx), suggestions: listSuggestions(ctx, { status: q.status ?? "open", rx: q.rx, patientId: q.patient }) };
+  });
+  const sid = (req: FastifyRequest) => z.object({ id: z.coerce.number().int().min(1) }).parse(req.params).id;
+  app.post("/api/suggestions/:id/accept", async (req) => {
+    need(req, ["pharmacist"]);
+    const b = z.object({ note: z.string().max(300).optional() }).parse(req.body ?? {});
+    return acceptSuggestion(ctx, A(req), sid(req), b.note);
+  });
+  app.post("/api/suggestions/:id/dismiss", async (req) => {
+    need(req, ["pharmacist"]);
+    const b = z.object({ reason: z.string().max(300) }).parse(req.body ?? {});
+    return dismissSuggestion(ctx, A(req), sid(req), b.reason);
+  });
+  app.post("/api/suggestions/:id/change-request", async (req) => {
+    need(req, ["pharmacist"]);
+    const b = z.object({ message: z.string().max(2000).optional() }).parse(req.body ?? {});
+    return requestChange(ctx, A(req), sid(req), b.message);
   });
 
   app.get("/api/agents/provider", async () => ({ provider: rt().settings() }));
