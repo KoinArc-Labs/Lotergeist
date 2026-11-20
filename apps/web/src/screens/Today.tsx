@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { get, type User } from "../lib/api";
 import { C, Footer, Icon, MONO, pill, TONES } from "../components/kit";
 import { mainStyle, PageHeader } from "../components/Shell";
-import { Scenarios } from "../components/Scenarios";
 
 const EVENT_TONE: Record<string, string> = { Sold: "green", Filled: "violet", Received: "cold", Shelved: "cold", Quarantined: "red", Returned: "orange", Adjusted: "amber", Moved: "violet", Released: "green" };
 const TAG_TONE: Record<string, string> = { orange: "orange", green: "green", violet: "violet", red: "red" };
@@ -68,14 +67,6 @@ export function Today({ user }: { user: User }) {
             </span>
           </Link>
         )}
-        {user.role === "pharmacist" && (
-          <nav aria-label="Start here" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, fontSize: 14, color: C.dim }}>
-            <strong style={{ color: C.ink }}>Start here:</strong>
-            <Link to="/recalls" style={{ color: C.violet2 }}>1 Recall notice</Link>→<Link to="/inventory?filter=recall" style={{ color: C.violet2 }}>2 Quarantined lots</Link>→<Link to="/patients" style={{ color: C.violet2 }}>3 Patients</Link>→<Link to="/recalls" style={{ color: C.violet2 }}>4 Messages (use AI draft)</Link>
-            <span aria-hidden="true">·</span><Link to="/agents" style={{ color: C.violet2 }}>Try the AI agents</Link>
-          </nav>
-        )}
-        <Scenarios user={user} />
         {staff && refills.data && (
           <Link to="/refills" aria-label={`Refills: ${refills.data.counts.due} due, ${refills.data.counts.blocked} blocked by a recall`} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, padding: "14px 20px", borderRadius: 14, border: `1px solid ${refills.data.counts.blocked ? "var(--danger)" : C.line}`, background: refills.data.counts.blocked ? "var(--danger-soft)" : C.card, color: C.ink, textDecoration: "none" }}>
             <span style={{ fontSize: 28, fontWeight: 600, minWidth: 36 }}>{refills.data.counts.due}</span>

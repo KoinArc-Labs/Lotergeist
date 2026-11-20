@@ -20,6 +20,17 @@ Or `docker compose up` and open http://localhost:4000 (the Docker image was not 
 - Reset between takes: **Reset demo** on the Today screen. The scenario buttons also reset the data.
 - Optional: open **Test labels** on a phone or print it, so you can hold codes up to the webcam. Without a camera, paste a code into the scan box.
 
+## Where the demo tools live
+
+The product screens carry no demo content. Everything that exists only for the demo is on one page, **Demo guide** (sidebar, under "Demo"; pharmacist and technician; hidden when the API runs with `LG_DEMO=0`):
+
+- the three-minute path as links,
+- the scenario library and **Reset demo** (pharmacist),
+- **Test labels** and the **Sandbox outbox**,
+- the demo accounts.
+
+The sign-in page still shows the demo accounts and badge button while `LG_DEMO` is on. Set `LG_DEMO=0` for a product-only view. The demo notice (pharmacy-safety rule 10) stays on every staff page either way.
+
 ## 3-minute path
 
 Start on a fresh reset, not on a scenario. The seeded state has the recall fax D-0417-2026 waiting.
@@ -27,7 +38,7 @@ Start on a fresh reset, not on a scenario. The seeded state has the recall fax D
 | Time | Screen | Do and say |
 | --- | --- | --- |
 | 0:00 | Sign-in | "When a drug lot is recalled, a pharmacy knows who got the drug, not which lot. So it warns everyone, or no one." Point at the demo notice. Sign in as the pharmacist. |
-| 0:15 | Today | The red banner: recall fax D-0417-2026 arrived. "197 units on the shelf, 17 patients took one home." Point at the **Start here** row: Recall notice, Quarantined lots, Patients, Messages. |
+| 0:15 | Today | The red banner: recall fax D-0417-2026 arrived. "197 units on the shelf, 17 patients took one home." Say the path: recall notice, quarantined lots, patients, messages (the links are on **Demo guide**). |
 | 0:30 | Recalls | **Start recall**, then **Read this fax with OCR**. The browser reads the image, openFDA confirms the record, the Coroner pulls both lots. "A lot is kept only if it is printed in the notice. The model cannot add one." |
 | 0:55 | Recalls | Review impact: units moved to quarantine, the patient list, the channels per consent. |
 | 1:10 | Recalls | Messages: press **Use AI draft** (agent output is labelled "AI advisory, a pharmacist decides"), tick the attestation, send. "Nothing leaves this laptop: it goes to a sandbox outbox." Open **Sandbox outbox** to show a text carrying the pharmacy phone and STOP. |

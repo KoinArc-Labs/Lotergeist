@@ -57,6 +57,7 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
     <NavLink to={to} end={to === "/"}>{icon}{label}{badge}</NavLink>
   );
   const clinical = user.role !== "admin";
+  const demoMode = !!useQuery({ queryKey: ["auth-config"], queryFn: () => get<{ demo: unknown }>("/api/auth/config"), staleTime: 300_000 }).data?.demo;
   return (
     <div className="app">
       <aside className="side">
@@ -88,10 +89,9 @@ export function Shell({ user, children }: { user: User; children: ReactNode }) {
             <span className="nav-label">Admin</span>
             {item("/integrations", "Integrations", NavIcon.plug)}
           </>}
-          {clinical && <>
-            <span className="nav-label">Demo tools</span>
-            {item("/labels", "Test labels", Icon.tag())}
-            {user.role !== "cashier" && item("/outbox", "Sandbox outbox", Icon.mail())}
+          {demoMode && (user.role === "pharmacist" || user.role === "technician") && <>
+            <span className="nav-label">Demo</span>
+            {item("/demo", "Demo guide", Icon.tag())}
           </>}
         </nav>
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10, position: "relative" }}>

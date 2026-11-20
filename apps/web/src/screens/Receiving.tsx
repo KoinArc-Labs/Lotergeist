@@ -49,7 +49,6 @@ export function Receiving({ user }: { user: User }) {
     onSuccess: () => { setToast("Problem logged. The package is in quarantine Q-1."); clear(); setErr(""); refresh(); },
     onError: (e) => setErr(msg(e))
   });
-  const reset = useMutation({ mutationFn: () => post("/api/demo/reset"), onSuccess: () => { window.location.reload(); } });
 
   const d = out && out.delivery?.id === id ? out.delivery : view.data; // while a package is on screen, its invoice line shows "Scanning now"
   const done = d && d.checkedIn >= d.expected;
@@ -90,7 +89,6 @@ export function Receiving({ user }: { user: User }) {
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <Link to="/inventory" style={btn("primary", { minHeight: 46, padding: "0 20px", fontSize: 14 })}>View in inventory</Link>
                 {open.length > 0 && <button onClick={() => setPick(open[0].id)} style={btn("ghost", { minHeight: 46, fontSize: 14 })}>Next delivery: {open[0].id}</button>}
-                {user.role === "pharmacist" && <button onClick={() => reset.mutate()} style={btn("ghost", { minHeight: 46, fontSize: 14 })}>Replay demo</button>}
               </div>
             </div>
           )}

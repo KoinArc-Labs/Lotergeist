@@ -315,7 +315,6 @@ function Done({ r, onChange }: { r: any; onChange: () => void }) {
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const act = (path: string, ok: string) => async () => { try { await post(`/api/recalls/${r.id}/${path}`); setNote(ok); setErr(""); onChange(); void res.refetch(); } catch (e) { setErr(msg(e)); } };
-  const reset = useMutation({ mutationFn: () => post("/api/demo/reset"), onSuccess: () => window.location.reload() });
   const x = res.data;
   if (!x) return <p style={{ color: C.dim }}>Loading…</p>;
   const has = (k: string) => x.actions.some((a: any) => a.kind === k);
@@ -360,7 +359,6 @@ function Done({ r, onChange }: { r: any; onChange: () => void }) {
         <ErrorBox e={err} />
       </section>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button onClick={() => reset.mutate()} style={btn("ghost", { minHeight: 44 })}>Replay demo</button>
         <button disabled={x.status === "closed"} onClick={act("close", "Recall closed. The lots stay blocked at receiving and fill.")} style={btn("ghost", { minHeight: 44, opacity: x.status === "closed" ? 0.5 : 1 })}>{x.status === "closed" ? "Recall closed" : "Close this recall"}</button>
       </div>
     </div>

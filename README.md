@@ -12,7 +12,7 @@ Wholesalers track drugs by lot. Dispensing systems track drugs by patient. Nobod
 
 Chimera Rx captures lot and serial at receiving and again at fill (GS1 DataMatrix by camera or USB scanner, or OCR for labels without a barcode). A recall then resolves to the units on the shelf, which are quarantined, and the patients who took one home, who get drafted messages that a pharmacist approves.
 
-![Today screen after a Class I recall: 'Start here' row, demo scenarios, refills tile](docs/img/today.jpg)
+![Today screen after a Class I recall: refills tile](docs/img/today.jpg)
 
 ## Try it in 60 seconds
 
@@ -52,7 +52,7 @@ The "Badge tap / SSO" button is a demo stand-in that signs in the Store 7 pharma
 
 ### Three scenarios to click first
 
-Sign in as the pharmacist and use **Demo scenarios** on Today (each one resets the data and shows a short brief).
+Sign in as the pharmacist and open **Demo guide** in the sidebar for the scenarios (each one resets the data and shows a short brief).
 
 1. **Class I recall with patients to reach.** Recalls, look up `D-0611-2026`: the lot is confirmed, every on-shelf pen moves to quarantine, the impact list names the patients. Draft messages (try **Use AI draft**), tick the attestation, send. They land in the sandbox outbox.
 2. **Recall-aware refill.** Open Refills, then look up `D-0611-2026` in Recalls. The patient's refill row turns red and links to the recall.
